@@ -1,0 +1,43 @@
+{
+  "_note": "Worked example for Exercise 2, Part B. Field names and exact schema shown here illustrate the KIND of thing settings.json configures (permissions, hooks, model) — verify exact current key names against docs.claude.com before using this in a real project. Underscore-prefixed keys are inline comments for teaching purposes only, not a real Claude Code convention (plain JSON has no native comment syntax).",
+
+  "model": "claude-sonnet",
+  "_model_comment": "Team default is the mid-tier Sonnet model: strong enough for day-to-day coding and review tasks, cheaper and faster than the largest model for the high volume of routine edits this team runs through Claude Code. A specific task needing more capability can override this per-session.",
+
+  "permissions": {
+    "_comment": "Goal: let Claude run tests and read files freely (low risk, needed constantly); require a human's OK before anything that touches shared git history or deletes files (high blast radius, hard or impossible to undo).",
+    "allow": [
+      "Read(**)",
+      "Bash(pytest *)",
+      "Bash(npm test*)",
+      "Bash(ruff check*)",
+      "Bash(eslint*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git rebase*)",
+      "Bash(git reset*)",
+      "Bash(rm *)",
+      "Write(**/migrations/**)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/secrets/**)"
+    ]
+  },
+
+  "hooks": {
+    "_comment": "One hook: after Claude edits a Python file, auto-run black on it so every edit is consistently formatted without relying on Claude (or the human) to remember to run the formatter separately.",
+    "afterFileEdit": [
+      {
+        "match": "*.py",
+        "command": "black --quiet \"$FILE\"",
+        "_command_comment": "$FILE is the path of the file that was just edited. Runs black in quiet mode so it only touches formatting, no other output clutters the session."
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_note": "Conceptual example settings.json for this exercise. Field names and exact schema shown here illustrate the KIND of thing settings.json configures (permissions, hooks, model) — verify exact current key names against docs.claude.com before using this in a real project. Underscore-prefixed keys like this one are used here purely as inline comments for the exercise; they are not a real Claude Code convention.",
+
+  "model": "___FILL_ME_IN___",
+  "_model_comment": "Which model Claude Code should use for this project by default, e.g. a specific Claude model name. Leave/replace with your choice and explain why you picked it (cost vs. capability tradeoff) in your notes.",
+
+  "permissions": {
+    "_comment": "Fill this in per Part B, step 1: allow test-running and file reads freely; require confirmation before anything touching git history or deleting files.",
+    "allow": [
+      "___FILL_ME_IN___"
+    ],
+    "ask": [
+      "___FILL_ME_IN___"
+    ],
+    "deny": [
+      "___FILL_ME_IN___"
+    ]
+  },
+
+  "hooks": {
+    "_comment": "Fill this in per Part B, step 2: a hook that runs a formatter automatically after Claude edits a file. Conceptually, a hook entry needs (a) an event to trigger on, and (b) a command to run.",
+    "afterFileEdit": [
+      {
+        "command": "___FILL_ME_IN___",
+        "_command_comment": "The shell command to run, e.g. a formatter invocation."
+      }
+    ]
+  }
+}

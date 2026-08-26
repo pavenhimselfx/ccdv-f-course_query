@@ -1,0 +1,8 @@
+# Core dependencies for the CCDV-F self-study course.
+# Loose minimum pins so learners get recent bugfixes/features; see docs.claude.com
+# for the latest SDK version if you want to pin exactly.
+
+anthropic>=0.40.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+pytest>=8.0.0
