@@ -84,7 +84,7 @@ def main() -> None:
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = "claude-3-5-haiku-latest"  # TODO (learner): verify current model name
+    model = "claude-haiku-4-5"  # TODO (learner): verify current model name
 
     builders = {
         "zero-shot": build_zero_shot_prompt,

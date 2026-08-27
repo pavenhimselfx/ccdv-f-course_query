@@ -34,7 +34,7 @@ specifically test raw API-level mechanics no subscription product exposes.
 ## 1. Free path: use your Knowit Team/Enterprise subscription
 
 If your `claude.ai` account is on a Team or Enterprise plan, you can run Claude Code and the
-Claude Agent SDK against that subscription with no separate billing:
+Claude Agent SDK ag  ainst that subscription with no separate billing:
 
 1. **Install Claude Code** (the CLI) per the current instructions at
    [code.claude.com](https://code.claude.com) (the install command has changed over time —

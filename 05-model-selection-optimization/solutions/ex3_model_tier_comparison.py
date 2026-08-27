@@ -11,7 +11,7 @@ Verify current model identifiers at docs.claude.com before running.
 import os
 import time
 
-MODEL_SMALL = "claude-3-5-haiku-latest"   # TODO (learner): verify at docs.claude.com
+MODEL_SMALL = "claude-haiku-4-5"   # TODO (learner): verify at docs.claude.com
 MODEL_LARGE = "claude-opus-4-latest"      # TODO (learner): verify at docs.claude.com
 
 TASK_PROMPT = """A train leaves City A at 60 mph heading toward City B, 300 miles away.

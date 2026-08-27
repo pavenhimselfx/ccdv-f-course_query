@@ -61,11 +61,18 @@ def main() -> int:
         print("      pip install -r requirements.txt")
         return 1
 
+    # Model names/aliases get retired over time (this script was already
+    # updated once already, after the previous default -- "claude-3-5-haiku"
+    # plus a "-latest" suffix -- stopped resolving). If the string below
+    # 404s for you too, don't just re-run it: see the NotFoundError handler
+    # a few lines down, which looks up current models for you.
+    MODEL = "claude-haiku-4-5"
+
     try:
         client = anthropic.Anthropic(api_key=api_key)
 
         response = client.messages.create(
-            model="claude-3-5-haiku-latest",
+            model=MODEL,
             max_tokens=16,
             messages=[
                 {"role": "user", "content": "Reply with the single word: ready"}
@@ -89,6 +96,36 @@ def main() -> int:
         print("    or missing characters) into your environment or .env file.")
         print("  - Has the key been revoked or deleted in the console? Create")
         print("    a fresh one at console.anthropic.com > API Keys.")
+        return 1
+
+    except anthropic.NotFoundError:
+        print(f"FAILED: model {MODEL!r} was not found (HTTP 404).\n")
+        print("This almost always means the pinned model name has been")
+        print("retired since this course was written -- your API key and")
+        print("network setup are probably fine. Looking up the models your")
+        print("key can currently see...\n")
+        try:
+            available = list(client.models.list())
+            if available:
+                print("Models available to your key:")
+                for m in available:
+                    print(f"  - {getattr(m, 'id', m)}")
+                print(
+                    "\nPick a current small/fast model from that list (or the "
+                    "current Haiku-tier model at docs.claude.com), then edit "
+                    "the MODEL constant near the top of this script -- and "
+                    "the same string wherever else this course hardcoded "
+                    f"{MODEL!r}, e.g. via:\n"
+                    f"    grep -rl {MODEL!r} .."
+                )
+            else:
+                print("Your key returned an empty model list. Check your")
+                print("organization's model access in the console.")
+        except Exception as list_err:  # noqa: BLE001 - best-effort diagnostic
+            print(f"Could not list models either ({list_err!r}).")
+            print("Check docs.claude.com for the current model name/alias,")
+            print("or run: client.models.list() yourself once you're on a")
+            print("working model name.")
         return 1
 
     except anthropic.PermissionDeniedError:

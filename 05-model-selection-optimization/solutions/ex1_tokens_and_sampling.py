@@ -45,7 +45,7 @@ def try_exact_token_count(text: str) -> int | None:
 
         client = anthropic.Anthropic(api_key=api_key)
         result = client.messages.count_tokens(
-            model="claude-3-5-haiku-latest",  # TODO (learner): verify current model name
+            model="claude-haiku-4-5",  # TODO (learner): verify current model name
             messages=[{"role": "user", "content": text}],
         )
         # ASSUMPTION FLAGGED: the count-tokens response is assumed to expose
@@ -96,7 +96,7 @@ def part2_sampling_and_temperature() -> None:
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    model = "claude-3-5-haiku-latest"  # TODO (learner): verify current model name
+    model = "claude-haiku-4-5"  # TODO (learner): verify current model name
     prompt = "In one short sentence, describe an unusual pet."
 
     for temperature in [0.0, 1.0]:

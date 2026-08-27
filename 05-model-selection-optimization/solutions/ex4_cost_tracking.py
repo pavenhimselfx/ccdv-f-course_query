@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 # input, which is the general pattern across Anthropic's tiers) but the
 # actual numbers must come from anthropic.com/pricing.
 PRICING_PER_MILLION_TOKENS = {
-    "claude-3-5-haiku-latest": {"input": 0.80, "output": 4.00},   # PLACEHOLDER — verify!
+    "claude-haiku-4-5": {"input": 0.80, "output": 4.00},   # PLACEHOLDER — verify!
     "claude-opus-4-latest": {"input": 15.00, "output": 75.00},     # PLACEHOLDER — verify!
 }
 
@@ -121,15 +121,15 @@ def main() -> None:
     if not api_key:
         print("ANTHROPIC_API_KEY is not set.")
         print("Demonstrating estimate_cost() with made-up token counts instead:")
-        demo_cost = estimate_cost("claude-3-5-haiku-latest", 1000, 200)
-        print(f"  estimate_cost('claude-3-5-haiku-latest', 1000, 200) = ${demo_cost:.6f}")
+        demo_cost = estimate_cost("claude-haiku-4-5", 1000, 200)
+        print(f"  estimate_cost('claude-haiku-4-5', 1000, 200) = ${demo_cost:.6f}")
         print("  (using PLACEHOLDER prices — fill in real ones from anthropic.com/pricing)")
         return
 
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = "claude-3-5-haiku-latest"  # TODO (learner): verify current model name
+    model = "claude-haiku-4-5"  # TODO (learner): verify current model name
 
     tracker = CostTracker()
 

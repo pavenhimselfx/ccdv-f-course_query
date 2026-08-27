@@ -78,7 +78,7 @@ def main() -> None:
     client = anthropic.Anthropic(api_key=api_key)
     # TODO: pick a model. A smaller/cheaper tier is fine for this exercise;
     # check docs.claude.com for the current model name.
-    model = "claude-3-5-haiku-latest"
+    model = "claude-haiku-4-5"
 
     builders = {
         "zero-shot": build_zero_shot_prompt,

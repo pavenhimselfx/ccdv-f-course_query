@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 # TODO: fill these in from anthropic.com/pricing (current $ per MILLION
 # tokens). These starter numbers are PLACEHOLDERS, not real prices.
 PRICING_PER_MILLION_TOKENS = {
-    "claude-3-5-haiku-latest": {"input": 0.0, "output": 0.0},   # TODO: fill in real $/1M
+    "claude-haiku-4-5": {"input": 0.0, "output": 0.0},   # TODO: fill in real $/1M
     "claude-opus-4-latest": {"input": 0.0, "output": 0.0},       # TODO: fill in real $/1M
     # Add more model entries as needed. Consider also adding a reduced
     # "cache_read" rate per model here once you've verified the current
@@ -122,14 +122,14 @@ def main() -> None:
         print("ANTHROPIC_API_KEY is not set.")
         print("You can still implement/test estimate_cost() and CostTracker without a key —")
         print("try calling estimate_cost() by hand with made-up token counts, e.g.:")
-        print("  estimate_cost('claude-3-5-haiku-latest', 1000, 200)")
+        print("  estimate_cost('claude-haiku-4-5', 1000, 200)")
         print("(after filling in real prices in PRICING_PER_MILLION_TOKENS).")
         return
 
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = "claude-3-5-haiku-latest"  # TODO: verify this model name at docs.claude.com
+    model = "claude-haiku-4-5"  # TODO: verify this model name at docs.claude.com
 
     tracker = CostTracker()
 

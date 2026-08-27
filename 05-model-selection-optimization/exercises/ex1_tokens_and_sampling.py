@@ -91,7 +91,7 @@ def part2_sampling_and_temperature() -> None:
     # TODO: pick a model identifier. Use a fast/cheap tier for this exercise
     # since you're making several repeated calls. Check docs.claude.com for
     # the current model name if this one has been superseded.
-    model = "claude-3-5-haiku-latest"
+    model = "claude-haiku-4-5"
 
     prompt = "In one short sentence, describe an unusual pet."
 

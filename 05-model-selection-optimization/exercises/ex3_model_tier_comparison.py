@@ -28,7 +28,7 @@ import os
 import time
 
 # TODO: verify/update these against docs.claude.com before running.
-MODEL_SMALL = "claude-3-5-haiku-latest"   # "fast/small" tier placeholder
+MODEL_SMALL = "claude-haiku-4-5"   # "fast/small" tier placeholder
 MODEL_LARGE = "claude-opus-4-latest"      # "larger/more capable" tier placeholder — VERIFY THIS NAME
 
 # A moderately hard task: some multi-step reasoning, not a one-liner.

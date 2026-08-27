@@ -154,7 +154,7 @@ def llm_summarize(entries: list[dict]) -> str:
     combined = "\n---\n".join(f"(turn {e['turn']}, {e['role']}): {e['content']}" for e in entries)
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
-        model="claude-3-5-haiku-latest",  # cheap/fast model -- summarization doesn't need a frontier model
+        model="claude-haiku-4-5",  # cheap/fast model -- summarization doesn't need a frontier model
         max_tokens=150,
         system=(
             "You compact agent transcripts. Given several old turns of an "
