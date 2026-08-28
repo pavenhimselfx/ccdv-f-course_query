@@ -31,6 +31,31 @@ first — a large share of this course's exercises can run entirely on that, for
 2 covers the metered API key path, which you'll still want for the handful of exercises that
 specifically test raw API-level mechanics no subscription product exposes.
 
+## A note for Windows users: shell syntax differs from the examples below
+
+Every `export VAR="value"` command in this README is bash syntax (Mac/Linux, or Git Bash on
+Windows). If you're in CMD or PowerShell instead, it won't work as written — translate it:
+
+- **PowerShell:** `$env:VAR = "value"` (quotes are fine here — PowerShell strips them
+  correctly).
+- **CMD:** `set VAR=value` — and **don't** quote the value. Unlike bash, CMD does not strip
+  quote characters from `set`, so `set VAR="value"` sets `VAR` to the literal text `"value"`,
+  quotes included, which will break authentication in a confusing way (not an obvious error).
+- Not sure which shell you're actually in? Check the prompt: PowerShell's starts with `PS`,
+  e.g. `PS C:\Users\you\...>`. Plain CMD has no `PS` prefix. This matters because `set`/`echo
+  %VAR%` (CMD) and `$env:VAR`/`echo $env:VAR` (PowerShell) are not interchangeable — mixing
+  them silently does nothing rather than erroring clearly.
+- Both `set` and `$env:VAR =` are **session-only** — closing the terminal window loses the
+  variable, same as an un-persisted `export`. There's no exact equivalent of adding a line to
+  `~/.bashrc`; if you want a variable to persist across terminals/reboots, use System
+  Properties → Environment Variables (or `setx VAR value` in CMD, which only affects *new*
+  terminals, not your current one).
+- The Windows install command from [code.claude.com](https://code.claude.com) may install the
+  `claude` binary without adding its folder to PATH. If `claude --version` isn't recognized
+  right after installing, check whether `%USERPROFILE%\.local\bin` is on your PATH (System
+  Properties → Environment Variables → User variables → Path) and add it if missing, then open
+  a brand-new terminal — existing terminal windows won't pick up a PATH change.
+
 ## 1. Free path: use your Knowit Team/Enterprise subscription
 
 If your `claude.ai` account is on a Team or Enterprise plan, you can run Claude Code and the
