@@ -109,7 +109,15 @@ def convert_temperature(value: float, from_unit: str, to_unit: str) -> float:
     If from_unit == to_unit, just return value.
     Raise ValueError for any other unit names.
     """
-    raise NotImplementedError("TODO: implement convert_temperature")
+    from_unit = from_unit.lower()
+    to_unit = to_unit.lower()
+    if from_unit == to_unit:
+        return value
+    if from_unit == "celsius" and to_unit == "fahrenheit":
+        return (value * 9 / 5) + 32
+    if from_unit == "fahrenheit" and to_unit == "celsius":
+        return (value - 32) * 5 / 9
+    raise ValueError(f"Unsupported unit conversion: {from_unit} -> {to_unit}")
 
 
 # A safe-ish arithmetic evaluator restricted to numbers and +-*/ - do not
@@ -151,24 +159,47 @@ def calculate(expression: str) -> float:
 TOOLS = [
     {
         "name": "convert_temperature",
-        "description": "TODO",
+        "description": (
+            "Convert a temperature value between celsius and fahrenheit. "
+            "Use this whenever a temperature needs to change units."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                # TODO: value (number), from_unit (string), to_unit (string)
+                "value": {
+                    "type": "number",
+                    "description": "The temperature value to convert.",
+                },
+                "from_unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "The unit `value` is currently in.",
+                },
+                "to_unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "The unit to convert `value` into.",
+                },
             },
-            "required": [],  # TODO
+            "required": ["value", "from_unit", "to_unit"],
         },
     },
     {
         "name": "calculate",
-        "description": "TODO",
+        "description": (
+            "Evaluate a simple arithmetic expression using +, -, *, / and "
+            "parentheses. Use this for any numeric computation instead of "
+            "doing the math yourself."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                # TODO: expression (string)
+                "expression": {
+                    "type": "string",
+                    "description": "An arithmetic expression, e.g. '3 * 12'.",
+                },
             },
-            "required": [],  # TODO
+            "required": ["expression"],
         },
     },
 ]
@@ -216,7 +247,44 @@ def run_agent_loop(user_question: str, max_iterations: int = 6) -> str:
 
     return "Stopped: hit max_iterations without a final answer."
     """
-    raise NotImplementedError("TODO: implement run_agent_loop")
+    messages = [{"role": "user", "content": user_question}]
+
+    for _ in range(max_iterations):
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=1024,
+            tools=TOOLS,
+            messages=messages,
+        )
+
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason != "tool_use":
+            return "".join(
+                block.text for block in response.content if block.type == "text"
+            )
+
+        tool_result_blocks = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            print(f"Tool call: {block.name}({block.input})")
+            tool_fn = TOOL_IMPLEMENTATIONS[block.name]
+            try:
+                result = tool_fn(**block.input)
+                content = str(result)
+            except Exception as e:
+                content = f"Error: {e}"
+            tool_result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": content,
+                }
+            )
+        messages.append({"role": "user", "content": tool_result_blocks})
+
+    return "Stopped: hit max_iterations without a final answer."
 
 
 if __name__ == "__main__":

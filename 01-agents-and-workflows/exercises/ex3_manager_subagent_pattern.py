@@ -118,7 +118,14 @@ async def call_claude(system: str, user: str) -> str:
     subagent below: isolation is achieved simply by never reusing a prior
     call's context, not by any extra "clear the context" step.
     """
-    raise NotImplementedError("TODO: implement call_claude")
+    options = ClaudeAgentOptions(system_prompt=system)
+    chunks = []
+    async for message in query(prompt=user, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    chunks.append(block.text)
+    return "".join(chunks).strip()
 
 
 async def manager_decompose(goal: str) -> list[str]:
@@ -133,7 +140,20 @@ async def manager_decompose(goal: str) -> list[str]:
     list[str]. (Ask explicitly for "ONLY a JSON array of 3 strings, no
     other text" to make parsing reliable.)
     """
-    raise NotImplementedError("TODO: implement manager_decompose")
+    system = (
+        "You are a project manager decomposing a research task into "
+        "focused subtasks for independent research subagents."
+    )
+    user = (
+        f"Goal: {goal}\n\n"
+        "Decompose this into exactly 3 short subtask descriptions covering:\n"
+        "1. Likely customer pain points the product addresses\n"
+        "2. Two or three plausible competitor products and how they differ\n"
+        "3. A risk/objection a skeptical buyer might raise\n\n"
+        "Respond with ONLY a JSON array of exactly 3 strings, no other text."
+    )
+    response = await call_claude(system, user)
+    return json.loads(response)
 
 
 async def run_subagent(subtask: str) -> str:
@@ -152,7 +172,14 @@ async def run_subagent(subtask: str) -> str:
 
     Return the subagent's text response.
     """
-    raise NotImplementedError("TODO: implement run_subagent")
+    system = (
+        "You are a focused research subagent. You will be given exactly "
+        "one subtask. Respond ONLY to that subtask in 2-4 sentences. You "
+        "have no knowledge of any other subtask or of the overall project "
+        "beyond what's stated here."
+    )
+    user = f"Product: {PRODUCT_DESCRIPTION}\n\nSubtask: {subtask}"
+    return await call_claude(system, user)
 
 
 async def manager_synthesize(goal: str, subtask_results: list[dict]) -> str:
@@ -166,7 +193,21 @@ async def manager_synthesize(goal: str, subtask_results: list[dict]) -> str:
 
     Return the final brief text.
     """
-    raise NotImplementedError("TODO: implement manager_synthesize")
+    system = (
+        "You are the manager writing a final competitive launch brief by "
+        "synthesizing independent research results into one coherent brief."
+    )
+    results_block = "\n\n".join(
+        f"Subtask: {item['subtask']}\nResult: {item['result']}"
+        for item in subtask_results
+    )
+    user = (
+        f"Goal: {goal}\n\n"
+        f"Research results from independent subagents:\n\n{results_block}\n\n"
+        "Write one coherent short launch brief (a few short paragraphs) "
+        "that draws on all three results."
+    )
+    return await call_claude(system, user)
 
 
 async def run_manager_subagent_pipeline(goal: str) -> str:
