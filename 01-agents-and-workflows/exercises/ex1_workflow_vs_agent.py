@@ -94,6 +94,7 @@ Write your predictions as comments. The reasoning is the point.
 
 import asyncio
 import json
+import re
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -153,7 +154,18 @@ async def ask_claude(prompt: str, system_prompt: str | None = None) -> str:
     make exactly one round trip to Claude and yield the result as a stream
     of messages ending with an AssistantMessage containing the answer.
     """
-    raise NotImplementedError("TODO: implement ask_claude")
+    options = (
+        ClaudeAgentOptions(system_prompt=system_prompt)
+        if system_prompt is not None
+        else ClaudeAgentOptions()
+    )
+    chunks = []
+    async for message in query(prompt=prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    chunks.append(block.text)
+    return "".join(chunks).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +184,18 @@ async def extract_structured_data(text: str) -> dict:
     the whole workflow - that's exactly the kind of deterministic error
     handling a workflow's fixed code path gives you "for free".
     """
-    raise NotImplementedError("TODO: implement extract_structured_data")
+    prompt = (
+        "Analyze the following piece of customer feedback. Respond with ONLY "
+        "valid JSON, no other text and no markdown code fences, matching "
+        'exactly this shape:\n'
+        '{"sentiment": "positive"|"negative"|"neutral", "topic": "<short topic>"}\n\n'
+        f"Feedback text:\n{text}"
+    )
+    response = await ask_claude(prompt)
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        return {"sentiment": "neutral", "topic": "unknown (parse error)"}
 
 
 def needs_human_review_workflow(text: str) -> bool:
@@ -197,7 +220,13 @@ def needs_human_review_workflow(text: str) -> bool:
 
     Return True/False.
     """
-    raise NotImplementedError("TODO: implement needs_human_review_workflow")
+    keywords = [
+        "lawyer", "legal", "sue", "lawsuit", "attorney",
+        "delete my data", "delete my account", "delete all my data",
+        "unsafe", "safety", "dangerous", "injur", "hurt",
+    ]
+    lowered = text.lower()
+    return any(re.search(rf"\b{re.escape(keyword)}", lowered) for keyword in keywords)
 
 
 async def run_workflow(samples: list[dict]) -> list[dict]:
@@ -223,23 +252,25 @@ async def run_workflow(samples: list[dict]) -> list[dict]:
 FLAGGED: list[dict] = []
 
 
-# TODO(Part B, step 1): Decorate this with @tool(name, description, schema).
-# The schema is a dict mapping each input's name to its Python type, e.g.
-# {"text_id": str, "reason": str} - the SDK turns this into the JSON schema
-# Claude actually sees. The description is what Claude uses to decide WHEN
-# to call this tool, so be specific (mirror FLAG_TOOL's old description:
-# "call this only for feedback mentioning safety concerns, legal threats, or
-# account/data deletion requests").
+@tool(
+    "flag_for_review",
+    "Flag a piece of customer feedback for human review. Call this only for "
+    "feedback mentioning safety concerns, legal threats, or a request to "
+    "delete the user's account/data.",
+    {"text_id": str, "reason": str},
+)
 async def flag_for_review(args):
     """
-    TODO(Part B, step 1, continued): The function body. `args` is a dict
-    with the keys you declared in the schema (e.g. args["text_id"],
-    args["reason"]). Append {"id": args["text_id"], "reason": args["reason"]}
-    to FLAGGED (so we can inspect what the agent decided), then return a
-    tool result in the SDK's expected shape:
-        {"content": [{"type": "text", "text": f"Flagged {args['text_id']} ..."}]}
+    `args` is a dict with the keys declared in the schema above. Append the
+    decision to FLAGGED (so we can inspect what the agent decided), then
+    return a tool result in the SDK's expected shape.
     """
-    raise NotImplementedError("TODO: implement flag_for_review")
+    FLAGGED.append({"id": args["text_id"], "reason": args["reason"]})
+    return {
+        "content": [
+            {"type": "text", "text": f"Flagged {args['text_id']} for review."}
+        ]
+    }
 
 
 async def run_agent(samples: list[dict]) -> str:
@@ -281,7 +312,36 @@ async def run_agent(samples: list[dict]) -> str:
     flag - contrast with Part A where needs_human_review is computed for
     every single text unconditionally by your fixed code.
     """
-    raise NotImplementedError("TODO: implement run_agent")
+    texts_block = "\n\n".join(
+        f"id: {sample['id']}\ntext: {sample['text']}" for sample in samples
+    )
+    user_prompt = (
+        "Here are three pieces of customer feedback:\n\n"
+        f"{texts_block}\n\n"
+        "For each text, decide whether it needs human review (it mentions "
+        "safety concerns, legal threats, or a request to delete the user's "
+        "account/data). Call flag_for_review for each text that needs "
+        "review, passing its id and a short reason. When you have "
+        "considered all three texts, respond with a short final summary "
+        "and do not call any more tools."
+    )
+
+    review_server = create_sdk_mcp_server(
+        name="review", version="1.0.0", tools=[flag_for_review]
+    )
+    options = ClaudeAgentOptions(
+        mcp_servers={"review": review_server},
+        allowed_tools=["mcp__review__flag_for_review"],
+        permission_mode="acceptEdits",
+    )
+
+    chunks = []
+    async for message in query(prompt=user_prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    chunks.append(block.text)
+    return "".join(chunks).strip()
 
 
 async def main():
@@ -310,6 +370,26 @@ async def main():
         "or conversely a task open-ended enough that hard-coding the steps "
         "would be impossible or brittle."
     )
+
+
+# ANSWER:
+# For this task, I'd deploy Part A (the workflow). Part B's semantic judgment
+# did catch a bug in my keyword list (the "issue" containing "sue" false
+# positive on t3), but that bug is fixable, not inherent to the workflow
+# approach. Once fixed, a fixed pipeline is cheaper, faster, fully
+# predictable (a known number of Claude calls per text), and testable
+# without hitting the API at all. At real scale - tens of thousands of texts
+# a day - that predictability matters more than an agent's flexibility,
+# which isn't even needed here since the decision space is narrow and
+# enumerable (safety / legal / deletion).
+#
+# I'd flip to an agent for something like open-ended customer support
+# replies, where a single message might contain one question or three
+# unrelated ones, and you can't write a fixed sequence of steps in advance
+# that covers every possible combination a customer might type. There the
+# task itself is unbounded, so hard-coding "always do step 1, then step 2"
+# would either miss things or need an explosion of special-case branches -
+# you actually need Claude deciding, per message, what steps are relevant.
 
 
 if __name__ == "__main__":
