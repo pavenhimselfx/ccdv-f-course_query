@@ -61,7 +61,18 @@ def run_sequential(api_key: str):
 
     TODO 3: Return the results list.
     """
-    raise NotImplementedError("TODO: implement run_sequential -- see docstring above")
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    results = []
+    for item in ITEMS:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=60,
+            messages=[{"role": "user", "content": item}],
+        )
+        results.append(response.content[0].text)
+    return results
 
 
 async def run_concurrent(api_key: str):
@@ -85,7 +96,19 @@ async def run_concurrent(api_key: str):
     as an async context manager (`async with anthropic.AsyncAnthropic(...)
     as client:`) so cleanup happens automatically.
     """
-    raise NotImplementedError("TODO: implement run_concurrent -- see docstring above")
+    import anthropic
+
+    async def ask(client, item):
+        response = await client.messages.create(
+            model=MODEL,
+            max_tokens=60,
+            messages=[{"role": "user", "content": item}],
+        )
+        return response.content[0].text
+
+    async with anthropic.AsyncAnthropic(api_key=api_key) as client:
+        results = await asyncio.gather(*(ask(client, item) for item in ITEMS))
+    return list(results)
 
 
 def main():
@@ -123,6 +146,33 @@ def main():
     # Is there a cost discount? At what volume (5 items? 5,000? 5 million?)
     # does one clearly beat the other, and why?
     # ---------------------------------------------------------------------
+    #
+    # ANSWER: I measured this directly -- 10.05s sequential vs. 1.96s
+    # concurrent for the same 5 calls (5.1x speedup, essentially ideal,
+    # since with only 5 requests I'm nowhere near a rate limit and each
+    # call's time is almost entirely server-side wait, not local CPU).
+    #
+    # The core difference from batch (ex4) is timing, not just "faster vs.
+    # slower": asyncio.gather still gives real-time results -- my process
+    # stayed running and connected for those ~2 seconds and got answers
+    # back immediately, the same shape as ex4's realtime calls just
+    # overlapped instead of sequential. Batch trades a much longer,
+    # open-ended wait (I saw several minutes for just 4 requests, docs cite
+    # up to ~24h worst case) for NOT needing a process alive and connected
+    # the whole time, plus a per-token cost discount asyncio.gather doesn't
+    # get -- gather still pays full realtime rate on every call, it just
+    # changes WHEN you pay the latency, not the price.
+    #
+    # Volume is where asyncio.gather stops being the right tool even if
+    # nothing needs sub-second results: at thousands+ items, gather() would
+    # be holding that many concurrent connections open at once, and I'd be
+    # hand-rolling my own rate-limit/retry/backoff logic to avoid getting
+    # throttled or overwhelming the API -- exactly the operational
+    # complexity the batch API absorbs for you. So: 5 items, gather easily
+    # wins (simpler code, real-time answer, no reason to wait minutes). At
+    # real volume (thousands-millions) with nothing waiting synchronously,
+    # batch wins even though it's slower, because it removes both the cost
+    # premium and the self-managed concurrency/rate-limiting burden.
 
 
 if __name__ == "__main__":

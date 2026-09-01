@@ -76,7 +76,18 @@ def submit_batch(client):
     before, e.g. across SDK versions that moved it in/out of a `beta`
     namespace.)
     """
-    raise NotImplementedError("TODO: implement submit_batch -- see docstring above")
+    requests = [
+        {
+            "custom_id": item["custom_id"],
+            "params": {
+                "model": MODEL,
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": item["question"]}],
+            },
+        }
+        for item in REQUESTS
+    ]
+    return client.messages.batches.create(requests=requests)
 
 
 def poll_until_done(client, batch_id: str, max_attempts: int = 10, delay_seconds: float = 5.0):
@@ -92,7 +103,13 @@ def poll_until_done(client, batch_id: str, max_attempts: int = 10, delay_seconds
       - Otherwise, sleep delay_seconds and try again.
     Return the last-seen batch object either way (caller checks status).
     """
-    raise NotImplementedError("TODO: implement poll_until_done -- see docstring above")
+    for attempt in range(max_attempts):
+        batch = client.messages.batches.retrieve(batch_id)
+        print(f"  attempt {attempt + 1}: processing_status={batch.processing_status}")
+        if batch.processing_status == "ended":
+            return batch
+        time.sleep(delay_seconds)
+    return batch
 
 
 def retrieve_results(client, batch_id: str):
@@ -104,7 +121,21 @@ def retrieve_results(client, batch_id: str):
       errored, print the error instead. Match each result's custom_id back
       to the original question in REQUESTS for readable output.
     """
-    raise NotImplementedError("TODO: implement retrieve_results -- see docstring above")
+    questions_by_id = {item["custom_id"]: item["question"] for item in REQUESTS}
+    for entry in client.messages.batches.results(batch_id):
+        question = questions_by_id.get(entry.custom_id, "<unknown>")
+        print(f"\n--- {entry.custom_id} ---")
+        print(f"  question: {question}")
+        if entry.result.type == "succeeded":
+            text = "".join(
+                block.text
+                for block in entry.result.message.content
+                if block.type == "text"
+            )
+            print(f"  answer: {text}")
+        else:
+            print(f"  result type: {entry.result.type}")
+            print(f"  detail: {entry.result}")
 
 
 def main():
@@ -117,8 +148,16 @@ def main():
     print("Polling for completion (this may legitimately take a while)...")
     batch = poll_until_done(client, batch.id)
 
-    print("Retrieving results...")
-    retrieve_results(client, batch.id)
+    if getattr(batch, "processing_status", None) == "ended":
+        print("Retrieving results...")
+        retrieve_results(client, batch.id)
+    else:
+        print(
+            "Batch not finished within the polling window in this run -- "
+            "that's expected/normal behavior for batch, not a bug. Re-run "
+            "retrieve_results(client, batch.id) later once processing_status "
+            "== 'ended'."
+        )
 
     # ---------------------------------------------------------------------
     # Compare and contrast (write your own notes as a comment here):
@@ -138,6 +177,38 @@ def main():
     # the total volume, and how time-sensitive "non-urgent" really is for
     # your specific case.
     # ---------------------------------------------------------------------
+    #
+    # ANSWER: I ran this for real -- submit, then poll for several minutes
+    # (well past the 10-attempt/5s polling window) before any answer came
+    # back at all. For just 4 requests, that wait wasn't worth it: a plain
+    # sequential loop of 4 realtime calls would have finished in a few
+    # seconds total, with far less code (no batch object, no custom_id
+    # matching, no polling loop, no "not ended yet" edge case to handle).
+    # Concurrent realtime (asyncio.gather, ex5) would be faster still --
+    # roughly 1x per-call latency instead of 4x -- at the cost of a bit more
+    # code and needing to mind rate limits, but still nowhere near batch's
+    # multi-minute-plus delay.
+    #
+    # If this became 50,000 tickets overnight instead of 4, my answer flips
+    # to batch, specifically because volume changes the cost/ops math: at
+    # that scale, batch's per-token discount adds up to real money, and you
+    # get that throughput without hand-managing concurrency/rate-limiting
+    # across tens of thousands of sequential or concurrent realtime calls
+    # yourself.
+    #
+    # Decision criteria:
+    #   1. Is anything (a human or a synchronous system) waiting on each
+    #      individual result right now? If yes, realtime (sequential if
+    #      volume is small, concurrent if it's not) -- batch's delay is a
+    #      non-starter. If no, batch is worth considering.
+    #   2. What's the volume? A handful of items barely justifies batch's
+    #      extra code/wait either way; real volume (thousands+) is where the
+    #      cost discount and built-in throughput actually pay for the extra
+    #      machinery.
+    #   3. How firm is "non-urgent," really? If it secretly means "within
+    #      the hour," verify the batch API's actual current completion-time
+    #      behavior against that need rather than assuming either "always
+    #      fast" or "always ~24h."
 
 
 if __name__ == "__main__":

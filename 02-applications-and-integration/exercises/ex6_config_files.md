@@ -29,7 +29,35 @@ change. At minimum, include:
 - A short note on where the system prompt used for classification lives, so Claude
   knows to look there rather than guessing.
 
-*(Write your CLAUDE.md here or in a separate file.)*
+```markdown
+# ticket-triage
+
+`ticket-triage` is a small internal CLI tool that reads support tickets from a local CSV
+file, sends each ticket's text to Claude for urgency and category classification, and
+writes the enriched rows to a new CSV. Used by the support team to prioritize inbound
+tickets faster than manual triage.
+
+## Commands
+
+- Run the tool: `python -m ticket_triage run --in tickets.csv --out tickets_classified.csv`
+- Run tests: `pytest`
+
+## Conventions and constraints
+
+- Never commit a real CSV of customer ticket data. Only the redacted example in
+  `sample_data/example_tickets.csv` belongs in git; real files live in the gitignored
+  `data/` directory.
+- The Claude model version is pinned in `ticket_triage/settings.py` as `CLAUDE_MODEL`.
+  Don't bump it without first running `pytest tests/test_classification_regressions.py`
+  against the new version.
+- The classification system prompt lives in `ticket_triage/prompts/system_prompt.txt` --
+  edit it there, don't write a new inline prompt elsewhere in the codebase.
+- This is a 3-person team project; keep PRs small and get one review before merging to
+  main.
+- This project targets Python 3.11+ and uses the sync `anthropic.Anthropic` client, not
+  async. Ticket volume is low enough that sequential calls are fine -- don't introduce
+  asyncio here without discussing it first, to keep the code simple for a small team.
+```
 
 ## Task 2 — Write a `settings.json`
 
@@ -43,7 +71,24 @@ should include:
   plausible field -- e.g. an environment variable to inject, or a default model
   setting).
 
-*(Write your settings.json here or in a separate file.)*
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest *)",
+      "Bash(python -m ticket_triage run --in sample_data/* *)"
+    ],
+    "ask": [
+      "Write(data/*)",
+      "Bash(python -m ticket_triage run --in data/* *)"
+    ]
+  },
+  "env": {
+    "TICKET_TRIAGE_ENV": "dev"
+  },
+  "model": "claude-sonnet-4-5-20250929"
+}
+```
 
 ## Task 3 — Explain your choices
 
@@ -52,7 +97,53 @@ it's for and why you included it. This is the part that actually tests understan
 anyone can copy a template, but you should be able to say *why* each piece matters for
 this specific project.
 
-*(Write your explanations here.)*
+**CLAUDE.md:**
+
+- The one-paragraph description orients Claude (or a new teammate) to what the project
+  even does before it's asked to change anything, instead of guessing from file names.
+- The commands section means Claude doesn't have to search the repo or guess how to run
+  the tool/tests before verifying a change actually works.
+- The "never commit real customer data" rule is a safety/compliance constraint, not a
+  style preference -- exactly the kind of thing that needs to be stated explicitly,
+  because it's easy for an agent (or a rushed human) to violate by default without it.
+- The model-pin note ties a config change to the specific regression test that should
+  catch behavior shifts from it, so a version bump doesn't silently change classification
+  behavior in production.
+- The system-prompt-location note prevents Claude from inventing a second, inconsistent
+  prompt somewhere else in the codebase when asked to "improve the classification logic."
+- The PR/review note is a lightweight team-process constraint specific to a 3-person repo,
+  where informal review discipline matters more than it would solo.
+- The sync-vs-async note heads off a plausible but unwanted "helpful" refactor -- an agent
+  (or an eager teammate) reaching for `asyncio.gather` to "speed this up" the way ex5 did,
+  even though this tool's low ticket volume doesn't need it and the team deliberately
+  chose simplicity over that performance gain. CLAUDE.md isn't just describing what
+  exists; it's also for blocking specific improvements that sound good in isolation but
+  aren't wanted here.
+
+**settings.json:**
+
+- `permissions.allow` for tests and for running the tool against the redacted sample data:
+  both are safe to auto-approve since neither can touch real customer data or do anything
+  destructive -- routine actions a developer would approve every time anyway.
+- `permissions.ask` for anything touching `data/` (real customer tickets): this is the
+  exact boundary named in `CLAUDE.md` -- real data is higher-stakes, so those actions
+  should prompt for confirmation instead of running silently.
+- `env.TICKET_TRIAGE_ENV`: a project-specific environment variable so the tool defaults
+  to a consistent runtime mode across the team without everyone setting it manually.
+- `model`: pins the same dated model version referenced in `CLAUDE.md` and
+  `ticket_triage/settings.py`, so a Claude Code session defaults to the same version the
+  application itself uses, avoiding a discrepancy between "what Claude Code assumes" and
+  "what the app actually runs."
+
+**A note on precedence:** this `settings.json` is meant to live at the *project* level
+(checked into git), not the user level, because these are team-wide rules everyone
+working on `ticket-triage` should share -- the auto-allow/ask boundary around real
+customer data isn't something any individual developer should be able to silently
+loosen for themselves. A developer's genuinely personal preferences (e.g. their own
+editor integration settings) belong in a user-level settings file instead, which
+typically merges with or overrides the project-level file depending on the field --
+worth checking current docs.claude.com for the exact precedence rules rather than
+assuming.
 
 ## How to know you succeeded
 
