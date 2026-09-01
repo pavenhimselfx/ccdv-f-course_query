@@ -70,7 +70,16 @@ def part_a_streaming(client):
     # down to just the text deltas -- know that the raw events exist even if
     # you use the convenience wrapper here.
 
-    raise NotImplementedError("TODO: implement Part A -- see comments above")
+    with client.messages.stream(
+        model=MODEL,
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for chunk in stream.text_stream:
+            print(chunk, end="", flush=True)
+        final_message = stream.get_final_message()
+
+    print("\n\nUsage:", final_message.usage)
 
 
 def part_b_vision(client):
@@ -101,7 +110,29 @@ def part_b_vision(client):
     # (e.g. with open("some.jpg", "rb") as f: data = base64.b64encode(f.read())
     #  .decode("utf-8")), and ask a real question about it.
 
-    raise NotImplementedError("TODO: implement Part B -- see comments above")
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": tiny_red_png_b64,
+                    },
+                },
+                {"type": "text", "text": question},
+            ],
+        }
+    ]
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=20,
+        messages=messages,
+    )
+    print(response.content[0].text)
 
 
 def main():

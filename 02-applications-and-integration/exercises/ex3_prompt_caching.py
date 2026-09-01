@@ -73,7 +73,20 @@ def make_call(client, question: str):
 
     TODO 3: Return the response.
     """
-    raise NotImplementedError("TODO: implement make_call -- see docstring above")
+    system = [
+        {
+            "type": "text",
+            "text": STATIC_CONTEXT,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=100,
+        system=system,
+        messages=[{"role": "user", "content": question}],
+    )
+    return response
 
 
 def print_usage(label: str, response):
@@ -117,6 +130,28 @@ def main():
     # content is, the size of the static block relative to per-call unique
     # content, and the cache's short lifetime. Give one concrete example of
     # each (a good caching fit, and a poor one).
+
+
+# ANSWER (TODO 4):
+# Caching is worth it when a large static block gets reused across many
+# calls before the cache's short lifetime expires. My own run showed this
+# directly: the 5641-token STATIC_CONTEXT was written once on call 1
+# (cache_creation_input_tokens=5641) and then served from cache on call 2
+# for free (cache_read_input_tokens=5641, input_tokens staying tiny at 25 --
+# just the new question). Good fit example: a support tool where dozens of
+# agents each ask a handful of questions per hour against the same 5000-token
+# policy excerpt -- large enough to clear the minimum cacheable length, and
+# frequent enough (many requests within a few minutes) to keep hitting the
+# cache before it goes cold.
+#
+# Caching is NOT worth it when the static block is small, or when it's large
+# but rarely reused before expiring. Poor fit example: a 50-token system
+# prompt called once an hour -- too small to qualify for caching at all, and
+# even if it did, an hour between calls is far longer than the cache
+# lifetime, so every call would pay the cache-write overhead and never land
+# a read. The failure mode to watch for isn't just "caching does nothing" in
+# that case -- cache writes aren't free, so marking content cache_control
+# without enough reuse can make a system slightly worse, not neutral.
 
 
 if __name__ == "__main__":
