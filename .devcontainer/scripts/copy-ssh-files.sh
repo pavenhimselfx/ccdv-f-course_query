@@ -27,10 +27,24 @@ mkdir -p "${SSH_DIR}" || {
   echo "ERROR: creating SSH dir failed" >&2
   exit 1
 }
-cp -rf "${TEMPLATE_DIR}/." "${SSH_DIR}/" || {
+
+# Copy entries individually, skipping "agent" (holds live SSH-agent socket
+# files, e.g. from 1Password, that can be created/removed by the host between
+# listing and copying). Sockets can't be usefully copied anyway, and letting
+# one failed entry abort the whole cp meant permissions below never got set.
+shopt -s dotglob nullglob
+for entry in "${TEMPLATE_DIR}"/*; do
+  name="$(basename "${entry}")"
+  [ "${name}" = "." ] || [ "${name}" = ".." ] && continue
+  [ "${name}" = "agent" ] && continue
+  cp -rf "${entry}" "${SSH_DIR}/" 2>/dev/null || echo "WARNING: skipping ${name} (failed to copy)" >&2
+done
+shopt -u dotglob nullglob
+
+if [ ! -f "${SSH_DIR}/config" ]; then
   echo "ERROR: copying SSH template failed" >&2
   exit 1
-}
+fi
 
 chmod 700 "${SSH_DIR}"
 find "${SSH_DIR}" -mindepth 1 -type d -exec chmod 700 {} + 2>/dev/null || true
