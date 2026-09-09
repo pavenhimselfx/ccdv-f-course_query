@@ -18,6 +18,7 @@ SCRIPTS_DIR="/xyz/.devcontainer/scripts"
 sudo chown -R container-user:container-user \
   "$HOME/.claude" \
   "$HOME/.continue" \
+  "$HOME/.gemini" \
   "$HOME/.config/gh" \
   "$HOME/.ssh" \
   "$HOME/.sshtemplate" 2>/dev/null || true

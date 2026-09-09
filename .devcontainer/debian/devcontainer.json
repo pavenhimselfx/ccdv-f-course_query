@@ -14,7 +14,8 @@
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/container-user/.sshtemplate,type=bind,readonly,consistency=cached",
     "source=ccdv-f-course-query-claude-${localWorkspaceFolderBasename},target=/home/container-user/.claude,type=volume",
-    "source=ccdv-f-course-query-continue-${localWorkspaceFolderBasename},target=/home/container-user/.continue,type=volume"
+    "source=ccdv-f-course-query-continue-${localWorkspaceFolderBasename},target=/home/container-user/.continue,type=volume",
+    "source=ccdv-f-course-query-gemini-${localWorkspaceFolderBasename},target=/home/container-user/.gemini,type=volume"
   ],
   // Keep customizations for VS Code settings and extensions
   "customizations": {
@@ -45,7 +46,8 @@
         "timonwong.shellcheck",
         "ms-vscode.vscode-chat-customizations-evaluations",
         "rogalmic.bash-debug",
-        "DavidAnson.vscode-markdownlint"
+        "DavidAnson.vscode-markdownlint",
+        "google.google-antigravity"
       ]
     }
   },
