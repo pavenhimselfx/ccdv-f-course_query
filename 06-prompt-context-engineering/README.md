@@ -443,3 +443,66 @@ them against the live API and compare real outputs. Compare your work against
 `solutions/` afterward. Finish with `quiz.md` to self-check your
 understanding of all three skills in this domain before moving to the next
 module.
+
+---
+
+## Key takeaways from working the exercises
+
+Same spirit as Domain 5's equivalent section: these are the concrete findings
+that came out of actually *running* ex1-ex3, not restatements of the
+conceptual sections above. Several either confirmed or, in one case,
+meaningfully sharpened a prediction made before seeing real output.
+
+1. **Pruning and compaction attack different things, and it shows in the
+   numbers.** In a real 10-turn simulated session, pruning did nearly all of
+   the character-count reduction — it acts immediately, every turn, on
+   individual oversized entries the moment they age out of the recent
+   window. Tracing the first compaction directly: by the time it ran,
+   pruning had already shrunk two old entries down to ~140 chars each, so
+   compaction collapsing them into one summary only saved ~179 more
+   characters. Compaction's real, distinct value was bounding entry
+   *count* (4 entries → 1), not raw size — which matters over an
+   arbitrarily long session where pruned-but-still-separate entries would
+   otherwise keep accumulating one per turn forever.
+2. **A rule-based summarizer's value isn't only "keeps more facts."** Asking
+   an LLM to produce a compaction summary, instead of a fixed metadata-only
+   rule, preserved *structural* information a fixed rule can't represent at
+   all (which tool ran, what shape its output had) — and, on data with
+   genuinely no facts to preserve, it correctly said so explicitly instead
+   of fabricating a plausible-sounding detail. That's a more useful, more
+   honest failure mode than a rigid rule can produce either way.
+3. **"More consistent" and "reliably parseable" are different bars, and
+   prompting techniques hit them at different points.** Adding a system
+   prompt + clearer instructions made output consistent in the way a human
+   would notice (tone, length, always covering the core issue and the ask)
+   — but it was still free-form prose with no guaranteed structure. Only
+   adding an explicit output-format spec *and* a concrete worked example
+   got output to a shape that actually parsed reliably — verified with a
+   real regex against real output, not by eyeballing it.
+4. **A few-shot example can add new content, not just reformat existing
+   content.** The same prompt-iteration exercise showed the example forcing
+   an implicit, prose-embedded signal ("pretty urgent") into an explicit,
+   enum-constrained field ("Urgency: high") that the earlier, clearer-but-
+   unstructured prompt never produced. Better formatting instructions
+   didn't just rearrange the same information — they made the model state
+   something categorically that it had previously only implied.
+5. **Forced tool-use gets you a structured shape; it doesn't get you
+   correctness.** Tool-choice forcing produced a real `tool_use` block with
+   the right field names every time in testing — but nothing about that
+   guarantees the values inside are valid (right type, right enum member,
+   nothing missing). Structure and correctness are separate guarantees,
+   and only one of them comes from the API call itself.
+6. **A validator only proves something once it's shown rejecting bad
+   input.** Building `validate_ticket_info()` and only testing it against
+   good data would have proven nothing — the real evidence came from
+   feeding it five deliberately broken mocks (missing field, wrong type,
+   invalid enum, a malformed container, and truncated JSON handled
+   separately at the `json.loads()` layer) and confirming each one failed
+   for the *specific, correct reason*, not just failed somehow.
+7. **The meta-lesson from this domain, same as Domain 5's:** running the
+   code surfaced results worth recording precisely because they weren't
+   all exactly what was predicted going in — the compaction-vs-pruning
+   split, and the LLM summarizer's "nothing to preserve" honesty, were both
+   more specific and more useful than the pre-run guess. Prediction is a
+   good starting hypothesis; the real measurement is what actually belongs
+   in the write-up.

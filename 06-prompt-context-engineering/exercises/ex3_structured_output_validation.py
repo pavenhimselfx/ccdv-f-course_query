@@ -72,7 +72,9 @@ except ImportError:
     anthropic = None
 
 
-MODEL = "claude-sonnet-4-5"  # verify current model name/availability at docs.claude.com
+MODEL = "claude-haiku-4-5"  # confirmed working in Domain 5 -- also the tier-appropriate
+# choice per Domain 5's lessons: simple, well-defined structured extraction, no
+# multi-step reasoning needed
 
 ALLOWED_CATEGORIES = {"billing", "technical", "feature_request", "account", "other"}
 ALLOWED_URGENCY = {"low", "medium", "high"}
@@ -94,7 +96,36 @@ this is pretty urgent, please help ASAP.
 # "input_schema" (a JSON-schema-shaped dict: type "object", "properties" for
 # each of the four fields above with their types, an "enum" list for
 # issue_category and urgency, and "required" listing all four field names).
-TICKET_TOOL = None  # TODO: replace with your tool definition
+TICKET_TOOL = {
+    "name": "ticket_info",
+    "description": (
+        "Record structured information extracted from a customer support "
+        "ticket: the customer's name, the issue category, its urgency, and "
+        "any action the customer explicitly requested."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "customer_name": {"type": "string"},
+            "issue_category": {
+                "type": "string",
+                "enum": sorted(ALLOWED_CATEGORIES),
+            },
+            "urgency": {
+                "type": "string",
+                "enum": sorted(ALLOWED_URGENCY),
+            },
+            "requested_action": {
+                "type": "string",
+                "description": (
+                    "What the customer explicitly asked for. Use an empty "
+                    "string if nothing was requested."
+                ),
+            },
+        },
+        "required": ["customer_name", "issue_category", "urgency", "requested_action"],
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +152,25 @@ def extract_structured_output(client, ticket_text: str) -> dict:
     Raise a RuntimeError with a clear message if no tool_use block is found
     at all (defensive parsing: don't assume the model always complies).
     """
-    raise NotImplementedError
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=300,
+        tools=[TICKET_TOOL],
+        tool_choice={"type": "tool", "name": "ticket_info"},
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Extract the ticket info from this support ticket using "
+                    f"the ticket_info tool.\n\n{ticket_text}"
+                ),
+            }
+        ],
+    )
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use":
+            return block.input
+    raise RuntimeError("No tool_use block found in Claude's response")
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +203,41 @@ def validate_ticket_info(data: dict) -> dict:
     TicketInfo.model_validate(data) inside a try/except that re-raises as
     ValueError with the pydantic error's message). Either approach is fine.
     """
-    raise NotImplementedError
+    if not isinstance(data, dict):
+        raise ValueError(f"expected a dict, got {type(data).__name__}: {data!r}")
+
+    for key in ("customer_name", "issue_category", "urgency", "requested_action"):
+        if key not in data:
+            raise ValueError(f"missing required field {key!r}")
+
+    customer_name = data["customer_name"]
+    if not isinstance(customer_name, str):
+        raise ValueError(
+            f"customer_name must be a string, got {type(customer_name).__name__}: {customer_name!r}"
+        )
+
+    requested_action = data["requested_action"]
+    if not isinstance(requested_action, str):
+        raise ValueError(
+            f"requested_action must be a string, got {type(requested_action).__name__}: {requested_action!r}"
+        )
+
+    issue_category = data["issue_category"]
+    if not isinstance(issue_category, str) or issue_category not in ALLOWED_CATEGORIES:
+        raise ValueError(
+            f"issue_category {issue_category!r} is not one of {sorted(ALLOWED_CATEGORIES)}"
+        )
+
+    urgency = data["urgency"]
+    if not isinstance(urgency, str) or urgency not in ALLOWED_URGENCY:
+        raise ValueError(f"urgency {urgency!r} is not one of {sorted(ALLOWED_URGENCY)}")
+
+    return {
+        "customer_name": customer_name,
+        "issue_category": issue_category,
+        "urgency": urgency,
+        "requested_action": requested_action,
+    }
 
 
 # ---------------------------------------------------------------------------

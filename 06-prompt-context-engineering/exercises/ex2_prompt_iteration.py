@@ -50,7 +50,8 @@ except ImportError:
     anthropic = None
 
 
-MODEL = "claude-sonnet-4-5"  # verify current model name/availability at docs.claude.com
+MODEL = "claude-sonnet-5"  # confirmed working in Domain 5's ex3/ex4 -- claude-sonnet-4-5
+# (the exercise's original placeholder) is the prior generation
 
 SAMPLE_TICKETS = [
     """Subject: App crashes on login
@@ -86,7 +87,7 @@ def v0_prompt(ticket_text: str) -> dict:
     baseline to improve on. Don't overthink this one — it's supposed to be
     weak on purpose.
     """
-    raise NotImplementedError
+    return {"system": None, "user": f"Summarize this: {ticket_text}"}
 
 
 def v1_prompt(ticket_text: str) -> dict:
@@ -103,7 +104,18 @@ def v1_prompt(ticket_text: str) -> dict:
     This is section 2.1 (instruction clarity) + 2.3 (system vs. user
     placement) from the README, applied together.
     """
-    raise NotImplementedError
+    system = (
+        "You are a customer support triage assistant. For every ticket you "
+        "are given, identify the core issue and, if the customer explicitly "
+        "asked for something, what they're asking for."
+    )
+    user = (
+        "Summarize the customer support ticket below in 1-2 sentences. "
+        "Focus on what the actual problem is and what the customer wants "
+        "done about it.\n\n"
+        f"Ticket:\n{ticket_text}"
+    )
+    return {"system": system, "user": user}
 
 
 def v2_prompt(ticket_text: str) -> dict:
@@ -123,7 +135,36 @@ def v2_prompt(ticket_text: str) -> dict:
     This is section 2.2 (few-shot) + 2.4 (output constraints) from the
     README, layered on top of v1's clarity and system/user split.
     """
-    raise NotImplementedError
+    system = (
+        "You are a customer support triage assistant. For every ticket you "
+        "are given, identify the core issue and, if the customer explicitly "
+        "asked for something, what they're asking for."
+    )
+    example_ticket = (
+        "Subject: Can't reset my password\n"
+        "I've clicked the reset link three times and never get the email. "
+        "I need access back before my shift starts tonight."
+    )
+    example_output = (
+        "Issue: Password reset emails aren't arriving\n"
+        "Urgency: high\n"
+        "Requested action: Restore account access before tonight's shift"
+    )
+    user = (
+        "Summarize the customer support ticket below. Respond with EXACTLY "
+        "three lines, in this format, and nothing else -- no greeting, no "
+        "restated ticket text, no extra commentary:\n"
+        "Issue: <one clause>\n"
+        "Urgency: <low|medium|high>\n"
+        "Requested action: <one clause, or \"none stated\">\n\n"
+        "Example:\n"
+        f"Ticket:\n{example_ticket}\n\n"
+        f"Output:\n{example_output}\n\n"
+        "Now do the same for this ticket:\n"
+        f"Ticket:\n{ticket_text}\n\n"
+        "Output:"
+    )
+    return {"system": system, "user": user}
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +180,12 @@ def call_claude(client, prompt_dict: dict) -> str:
     if prompt_dict.get("system"):
         kwargs["system"] = prompt_dict["system"]
     response = client.messages.create(**kwargs)
-    return response.content[0].text
+    # Not response.content[0].text -- see Domain 5's exercises: a thinking
+    # block can precede the text block, so filter by type rather than
+    # assume position.
+    return "".join(
+        block.text for block in response.content if getattr(block, "type", None) == "text"
+    )
 
 
 def main() -> None:
@@ -186,6 +232,59 @@ WRITE-UP (fill this in after running against all three tickets):
   4. Which single change across all three versions had the biggest impact
      on consistency, in your observation? This is the kind of judgment
      iterative refinement (README 2.6) is meant to build.
+
+ANSWER (from a real run against all three tickets):
+  1. v0 varied in every dimension a downstream system would care about.
+     Ticket 1's v0 used markdown headers, bullet lists, and even invented a
+     "Suggested next steps" section nobody asked for. Ticket 3's v0 also
+     used headers plus an unrequested editorial line ("This reads as
+     friendly, low-pressure feedback..."). Ticket 2's v0, by contrast, was
+     two short plain-prose paragraphs with no headers at all. So across
+     three structurally similar tasks, the model picked three different
+     presentation styles, two of which added unrequested content (next
+     steps, sentiment commentary) beyond "summarize this."
+
+  2. v1 collapsed to a consistent 1-2 sentence plain-prose format across
+     all three tickets -- no markdown, no invented sections, no
+     editorializing, every response covering both the core issue and the
+     customer's ask. Splitting credit between the two v1 changes: the
+     explicit "1-2 sentences" length constraint is what killed v0's
+     markdown-header sprawl (a hard length cap leaves no room for headers/
+     bullets/extra sections), while the system prompt's role framing
+     ("identify the core issue and what the customer is asking for") is
+     what made every response reliably cover the ask/urgency rather than
+     sometimes omitting it or wandering into unrelated commentary. Format
+     consistency traces mostly to the length constraint; content coverage
+     consistency traces mostly to the system prompt.
+
+  3. Both, but the more important change is content, not just format. v1's
+     prose already captured urgency IMPLICITLY (ticket 2: "not urgent, but
+     they'd like it looked into") -- v2 forces that same information into
+     an explicit, enum-constrained field ("Urgency: low"), which is new
+     structured content v1 never produced, not just a reformatting of the
+     same substance. I tested parseability directly rather than eyeballing
+     it: a strict regex requiring the exact 3-line shape and urgency in
+     {low, medium, high} matched all three real outputs with zero failures
+     -- "Issue: App crashes on login after latest update on Android" /
+     "Urgency: high" / "Requested action: Fix login crash asap", and
+     equivalently clean for tickets 2 and 3. v2's output is genuinely,
+     confirmedly safe to parse programmatically across all three tickets.
+
+  4. The v1->v2 change (output format constraints + few-shot example) had
+     the biggest impact on the kind of consistency that actually matters
+     for shipping this as a feature. v0->v1 was a real improvement (tone,
+     length, and content-coverage all stabilized), but v1's output was
+     still free-form prose with no guaranteed delimiters or fields -- not
+     something a downstream system could parse reliably, only something
+     that read as "more consistent" to a human. v2 is what crosses the
+     line from "improved but still free text" to "a guaranteed, structured
+     artifact," which is the actual bar for anything downstream needs to
+     consume programmatically (a ticket router, a dashboard, an alerting
+     rule keyed on urgency). If forced to pick one change, it's the
+     combination of an explicit output format spec plus a concrete
+     worked example -- description of the format alone (v1's clarity) got
+     the model closer, but only showing it the exact target shape made
+     that shape reliable across all three tickets.
 """
 
 
