@@ -1,0 +1,32 @@
+name: ccdv-f-course-query-development
+
+services:
+  dev:
+    # Instructions on how to build the image for this service
+    build:
+      # Use the current directory (.devcontainer) as the build context
+      context: .
+      # Specify the Dockerfile within the build context
+      dockerfile: Dockerfile.debian
+
+    # Define volumes to mount
+    volumes:
+      # Mount the entire project directory (one level up from .devcontainer)
+      # into the /workspace directory inside the container.
+      # 'cached' optimizes mount performance on macOS/Windows.
+      - ../..:/xyz:cached
+      - ccdv-f-course-query-claude:/home/container-user/.claude
+      - ccdv-f-course-query-continue:/home/container-user/.continue
+      # - /var/run/docker.sock:/var/run/docker.sock
+      # macOS Docker Desktop: forwards SSH agent via host-services socket.
+      # Linux alternative: ${SSH_AUTH_SOCK}:/ssh-agent
+      - /run/host-services/ssh-auth.sock:/ssh-agent
+    environment:
+      SSH_AUTH_SOCK: /ssh-agent
+    # Command to run when the container starts.
+    # 'sleep infinity' keeps the container running indefinitely so VS Code can attach.
+    command: sleep infinity
+
+volumes:
+  ccdv-f-course-query-claude:
+  ccdv-f-course-query-continue:

@@ -1,0 +1,56 @@
+{
+  "name": "ccdv-f-course-query - debian - Python Dev Container (Debian + Compose)",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  // --- Use Docker Compose configuration ---
+  // Point to your docker-compose file (relative to this folder)
+  "dockerComposeFile": "docker-compose.yml",
+  // The name of the service defined in docker-compose.yml that VS Code should attach to
+  "service": "dev",
+  // The path inside the container where your project files are mounted by docker-compose.yml
+  "workspaceFolder": "/xyz",
+  // --- End of Docker Compose configuration ---
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/container-user/.sshtemplate,type=bind,readonly,consistency=cached",
+    "source=ccdv-f-course-query-claude-${localWorkspaceFolderBasename},target=/home/container-user/.claude,type=volume",
+    "source=ccdv-f-course-query-continue-${localWorkspaceFolderBasename},target=/home/container-user/.continue,type=volume"
+  ],
+  // Keep customizations for VS Code settings and extensions
+  "customizations": {
+    "vscode": {
+      "settings": {
+        // Set zsh as the default terminal (installed in Dockerfile)
+        "terminal.integrated.defaultProfile.linux": "zsh"
+        // Optional Neovim integration path:
+        // "vscode-neovim.neovimExecutablePaths.linux": "/usr/bin/nvim"
+      },
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "EditorConfig.EditorConfig",
+        "humao.rest-client",
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker",
+        "streetsidesoftware.code-spell-checker-danish",
+        "kamikillerto.vscode-colorize",
+        "task.vscode-task",
+        "Anthropic.claude-code",
+        "mads-hartmann.bash-ide-vscode",
+        "usernamehw.errorlens",
+        "IronGeek.vscode-env",
+        "pokey.parse-tree",
+        "timonwong.shellcheck",
+        "ms-vscode.vscode-chat-customizations-evaluations",
+        "rogalmic.bash-debug",
+        "DavidAnson.vscode-markdownlint"
+      ]
+    }
+  },
+  // The user VS Code should run as inside the service container.
+  // Should match the user the service runs as.
+  "remoteUser": "container-user",
+  "postCreateCommand": "bash .devcontainer/debian/post-container-install.sh"
+}

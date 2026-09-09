@@ -1,0 +1,111 @@
+FROM debian:12-slim
+
+# Use bash for the shell (default is sh)
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# Set environment variables
+ENV USERNAME=container-user \
+    HOME_DIR="/home/container-user" \
+    DEBIAN_FRONTEND=noninteractive \
+    NODE_VERSION=24.11.1
+
+# Update PATH once with all directories
+ENV PATH="/usr/local/bin:/home/container-user/.local/bin:$PATH"
+
+# Install all system dependencies FIRST
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    # DON'T EVER INSTALL sudo FOR A PRODUCTION CONTAINER!
+    sudo \
+    python3 \
+    python3-pip \
+    python3-venv \
+    gcc \
+    libc6-dev \
+    python3-dev \
+    libffi-dev \
+    libssl-dev \
+    cargo \
+    make \
+    yarn \
+    git \
+    openssh-client \
+    xclip \
+    ripgrep \
+    build-essential \
+    bash \
+    zsh \
+    tree \
+    stow \
+    unzip \
+    tmux \
+    grep \
+    jq \
+    curl \
+    wget \
+    ca-certificates \
+    gnupg \
+    lsb-release && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user AFTER sudo is installed
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USERNAME && \
+    # Remove pw from every sudo making me able to play more. Requires sudo is installed. DON'T EVER USE FOR PRODUCTION!
+    echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Install latest nvim
+RUN NVIM_FILE="nvim-linux-arm64.tar.gz" && \
+    echo "Installing Neovim for ARM64 (Mac M3)..." && \
+    curl -LO "https://github.com/neovim/neovim/releases/latest/download/${NVIM_FILE}" && \
+    tar -C /opt -xzf "${NVIM_FILE}" && \
+    rm "${NVIM_FILE}" && \
+        # Link the binary to /usr/local/bin so it's globally available - remember to add '/usr/local/bin/' to path!
+    ln -s /opt/nvim-linux-arm64/bin/nvim /usr/local/bin/nvim
+
+# Install Task (go-task), used to drive per-exercise commands
+ENV TASK_VERSION=v3.52.0
+RUN TASK_URL="https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_arm64.tar.gz" && \
+    curl -L "$TASK_URL" | tar -xz -C /usr/local/bin task
+
+# Switch to non-root user for remaining setup
+USER $USERNAME
+WORKDIR $HOME_DIR
+
+# Install nvm + Node and expose binaries system-wide
+ENV NVM_DIR=/home/${USERNAME}/.nvm
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && \
+    . "$NVM_DIR/nvm.sh" && \
+    nvm install "$NODE_VERSION" && \
+    nvm alias default "$NODE_VERSION" && \
+    nvm use default && \
+    node_bin="$NVM_DIR/versions/node/$(nvm version default)/bin" && \
+    sudo ln -sf "$node_bin/node" /usr/local/bin/node && \
+    sudo ln -sf "$node_bin/npm"  /usr/local/bin/npm && \
+    sudo ln -sf "$node_bin/npx"  /usr/local/bin/npx
+
+# Install user-specific tools in one layer
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $HOME_DIR/.oh-my-zsh/custom/themes/powerlevel10k
+
+# GitHub CLI, from GitHub's own apt repository rather than the Debian
+# archive — bookworm ships a much older `gh`, and this way it updates with
+# the rest of the system. Used for issues, pull requests and releases;
+# `git` alone covers commits, tags and pushes.
+#
+# Authentication is deliberately NOT baked in: run `gh auth login` once per
+# machine, which stores its token in ~/.config/gh/ (outside the repository).
+# Never add a token to this image or to a file inside the project.
+RUN mkdir -p -m 755 /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y gh \
+    && rm -rf /var/lib/apt/lists/*
+
+USER container-user
+RUN curl -fsSL https://claude.ai/install.sh | bash
