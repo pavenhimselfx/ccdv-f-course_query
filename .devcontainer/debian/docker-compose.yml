@@ -16,6 +16,7 @@ services:
       # 'cached' optimizes mount performance on macOS/Windows.
       - ../..:/xyz:cached
       - ccdv-f-course-query-claude:/home/container-user/.claude
+      - ccdv-f-course-query-claude-json:/home/container-user/.claude-json
       - ccdv-f-course-query-continue:/home/container-user/.continue
       - ccdv-f-course-query-copilot:/home/container-user/.copilot
       - ccdv-f-course-query-gemini:/home/container-user/.gemini
@@ -29,6 +30,7 @@ services:
 
 volumes:
   ccdv-f-course-query-claude:
+  ccdv-f-course-query-claude-json:
   ccdv-f-course-query-continue:
   ccdv-f-course-query-copilot:
   ccdv-f-course-query-gemini:

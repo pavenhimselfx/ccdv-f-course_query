@@ -110,3 +110,13 @@ RUN sudo mkdir -p -m 755 /etc/apt/keyrings \
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
     curl -fsSL https://antigravity.google/cli/install.sh | bash && \
     rm -rf /tmp/* ~/.cache/*
+
+# Claude CLI stores its login/oauth state in ~/.claude.json, a single file
+# directly under $HOME rather than inside ~/.claude/. Docker volumes can only
+# back directories, not individual files, so mount a volume onto a directory
+# and symlink the dotfile into it (same pattern as ~/.claude, ~/.copilot,
+# ~/.continue) to persist login across container rebuilds.
+RUN mkdir -p "$HOME_DIR/.claude-json" && \
+    touch "$HOME_DIR/.claude-json/claude.json" && \
+    rm -f "$HOME_DIR/.claude.json" && \
+    ln -s "$HOME_DIR/.claude-json/claude.json" "$HOME_DIR/.claude.json"

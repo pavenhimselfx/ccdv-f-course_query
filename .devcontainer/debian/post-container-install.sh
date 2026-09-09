@@ -17,9 +17,11 @@ SCRIPTS_DIR="/xyz/.devcontainer/scripts"
 # that write into ~/.ssh and ~/.config/gh.
 sudo chown -R container-user:container-user \
   "$HOME/.claude" \
+  "$HOME/.claude-json" \
   "$HOME/.continue" \
   "$HOME/.gemini" \
   "$HOME/.copilot" \
+  "$HOME/.gh" \
   "$HOME/.ssh" \
   "$HOME/.sshtemplate" 2>/dev/null || true
 
