@@ -5,7 +5,7 @@ An unofficial, self-built study course covering the full exam blueprint for the 
 ## Exam basics (from the official exam guide)
 
 | | |
-|---|---|
+| --- | --- |
 | Credential | Claude Certified Developer – Foundations |
 | Exam code | CCDV-F |
 | Items | 53 (multiple-choice and multiple-response; each item states how many responses to select) |
@@ -28,7 +28,7 @@ Each numbered folder is one exam domain, weighted to match the official blueprin
 - **`quiz.md`** — original, exam-style practice questions (scenario-based, each stating how many responses to select) with a full answer key and rationale, in the same spirit as the sample questions in Section 8 of the official exam guide. These are illustrative practice questions the author wrote to mirror the blueprint — not real exam items.
 
 | Domain | Weight | Folder | Exercises |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 — Environment setup | — | `00-setup/` | 1 (get an API key, install SDK, verify) |
 | 1 — Agents and Workflows | 14.7% | `01-agents-and-workflows/` | 3 |
 | 2 — Applications and Integration | 33.1% | `02-applications-and-integration/` | 6 |
