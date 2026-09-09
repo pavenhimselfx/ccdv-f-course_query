@@ -20,7 +20,6 @@ sudo chown -R container-user:container-user \
   "$HOME/.continue" \
   "$HOME/.gemini" \
   "$HOME/.copilot" \
-  "$HOME/.config/gh" \
   "$HOME/.ssh" \
   "$HOME/.sshtemplate" 2>/dev/null || true
 

@@ -20,7 +20,8 @@
     "source=/run/host-services/ssh-auth.sock,target=/ssh-agent,type=bind"
   ],
   "remoteEnv": {
-    "SSH_AUTH_SOCK": "/ssh-agent"
+    "SSH_AUTH_SOCK": "/ssh-agent",
+    "GH_CONFIG_DIR": "/home/container-user/.gh"
   },
   // Keep customizations for VS Code settings and extensions
   "customizations": {

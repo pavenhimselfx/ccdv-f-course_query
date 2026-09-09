@@ -19,6 +19,7 @@ services:
       - ccdv-f-course-query-continue:/home/container-user/.continue
       - ccdv-f-course-query-copilot:/home/container-user/.copilot
       - ccdv-f-course-query-gemini:/home/container-user/.gemini
+      - ccdv-f-course-query-gh:/home/container-user/.gh
       # - /var/run/docker.sock:/var/run/docker.sock
       # SSH: the actual ~/.ssh template bind and SSH_AUTH_SOCK forwarding live
       # in devcontainer.json's "mounts" (see copy-ssh-files.sh), not here.
@@ -31,3 +32,4 @@ volumes:
   ccdv-f-course-query-continue:
   ccdv-f-course-query-copilot:
   ccdv-f-course-query-gemini:
+  ccdv-f-course-query-gh:
