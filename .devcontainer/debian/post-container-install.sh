@@ -28,5 +28,6 @@ git config --global --add safe.directory /xyz || true
 
 bash "$SCRIPTS_DIR/copy-ssh-files.sh"
 bash "$SCRIPTS_DIR/remove-userkeychain.sh" "$HOME/.ssh/config"
+bash "$SCRIPTS_DIR/install-global-npm-tools.sh"
 
 echo "Post container install script done running"
