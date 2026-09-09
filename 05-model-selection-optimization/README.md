@@ -398,3 +398,48 @@ windows matter, why sampling is non-deterministic, the zero/one/few-shot spectru
 fast/extended/adaptive-thinking mode spectrum, the Opus/Sonnet/Haiku capability-vs-cost
 tradeoff shape, why pinning model versions matters, and how token usage tracking + cost
 modeling + prompt caching fit together as a cost-optimization toolkit.
+
+---
+
+## Key takeaways from working the exercises
+
+The points above are this module's stable concepts. The list below is different: it's what
+actually came out of *running* Exercises 1-4 against a live account, including several
+things that turned out to have changed since this module was written — a live illustration
+of the "verify, don't assume" principle the sections above keep repeating.
+
+1. **Token estimation is a rough floor, not a prediction.** The `~4 chars/token` heuristic
+   undershot progressively worse the further content got from plain English prose — mild
+   for English sentences, ~2.5x off for a short code snippet, ~7.5x off for Japanese.
+2. **Non-determinism is the default, not an edge case.** Even with no way to lower
+   temperature at all, three identical prompts produced three genuinely different outputs.
+3. **Sampling controls and reasoning controls are different axes, not a rename.**
+   `temperature`/`top_p`/`top_k` are deprecated on newer-generation models in favor of an
+   `effort` parameter, which governs how much a model reasons before answering — not
+   sampling randomness. Raising effort produced *more* variety between calls, the opposite
+   of what raising temperature would predict.
+4. **Model capability is per-model, not per-SDK-version.** Two models on the exact same
+   installed SDK disagreed on which parameters they even accepted (temperature vs. effort)
+   — always verify against the specific model you're calling, not "the API" as a monolith.
+5. **Response content isn't reliably "text at index 0."** A thinking block can precede the
+   text block once reasoning is involved, breaking a bare `content[0].text` lookup — filter
+   by block `.type`, never assume position.
+6. **`max_tokens` must budget for reasoning + answer combined.** A too-small budget got
+   entirely consumed by an internal thinking block more than once across these exercises,
+   silently producing an empty answer with no exception raised at all.
+7. **More examples isn't automatically better.** Zero-shot matched few-shot's output
+   exactly on a simple, well-specified classification task, while costing roughly 2.5x
+   fewer tokens per call — a measured negative result, not a failed experiment.
+8. **Model tier tradeoffs are measurable, not just directional.** The fast/cheap tier
+   matched the largest tier's correctness on a genuine multi-step reasoning problem, at
+   roughly half the latency — real evidence against reflexively reaching for the biggest
+   model on anything that "looks hard."
+9. **Cost projections turn an abstract tier choice into a real number.** The same trivial
+   task, projected from a real 3-call sample out to 100,000 calls/day, showed a
+   >$15,000/year cost difference between tiers for zero measured accuracy benefit.
+10. **The meta-lesson that mattered most:** every finding above came from actually running
+    code against a live account and current documentation — not from trusting a docstring,
+    a training-data assumption, or "the way it probably still works." Model names,
+    parameters, and content-block shapes had all drifted since this module's exercises were
+    written, which is exactly the risk the "verify at docs.claude.com" notes throughout this
+    README are warning about — this is what that warning looks like when it actually fires.

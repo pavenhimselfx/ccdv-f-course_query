@@ -34,35 +34,57 @@ CATEGORIES = ["billing", "technical", "other"]
 
 def build_zero_shot_prompt(text: str) -> str:
     """No examples — just an instruction."""
-    # TODO: write an instruction-only prompt that asks the model to classify
-    # `text` into exactly one of CATEGORIES and reply with only the category
-    # word. Keep it concise.
-    raise NotImplementedError
+    return (
+        "Classify the following customer support message into exactly one "
+        "category: billing, technical, or other. Reply with only the "
+        "category word, nothing else.\n\n"
+        f"Message: {text}"
+    )
 
 
 def build_one_shot_prompt(text: str) -> str:
     """Exactly one worked example before the real task."""
-    # TODO: write a prompt that includes ONE example input -> expected
-    # category label, formatted exactly like you want the real answer
-    # formatted, followed by the real `text` to classify.
-    raise NotImplementedError
+    return (
+        "Classify the following customer support message into exactly one "
+        "category: billing, technical, or other. Reply with only the "
+        "category word, nothing else.\n\n"
+        "Message: I was double-billed for my last order, can I get a refund?\n"
+        "Category: billing\n\n"
+        f"Message: {text}\n"
+        "Category:"
+    )
 
 
 def build_few_shot_prompt(text: str) -> str:
     """Three or more worked examples, spanning categories/edge cases."""
-    # TODO: write a prompt that includes AT LEAST THREE examples — try to
-    # cover all three categories, and include at least one edge case (e.g.
-    # a message that could sound billing-ish but is really technical, or
-    # vice versa) — followed by the real `text` to classify.
-    raise NotImplementedError
+    return (
+        "Classify the following customer support message into exactly one "
+        "category: billing, technical, or other. Reply with only the "
+        "category word, nothing else.\n\n"
+        "Message: I was double-billed for my last order, can I get a refund?\n"
+        "Category: billing\n\n"
+        "Message: The export button does nothing when I click it.\n"
+        "Category: technical\n\n"
+        "Message: Your support team was really helpful yesterday, thanks!\n"
+        "Category: other\n\n"
+        # Edge case: mentions payment (sounds billing-ish) but the actual
+        # problem is a software error, not an account/charge issue.
+        "Message: My payment page keeps throwing a 500 error when I try to "
+        "update my card.\n"
+        "Category: technical\n\n"
+        f"Message: {text}\n"
+        "Category:"
+    )
 
 
 def classify(client, model: str, prompt: str) -> str:
     """Send `prompt` to the model and return the raw text reply, stripped."""
-    # TODO: call client.messages.create(model=model, max_tokens=10,
-    # messages=[{"role": "user", "content": prompt}]) and return
-    # response.content[0].text.strip()
-    raise NotImplementedError
+    response = client.messages.create(
+        model=model,
+        max_tokens=10,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
 
 
 def main() -> None:
@@ -109,8 +131,31 @@ def main() -> None:
     #   - Given the tradeoff, which style would you actually ship for this
     #     task, and why?
     #
-    # OBSERVATIONS:
-    # (write here)
+    # OBSERVATIONS (from a real run against claude-haiku-4-5):
+    #   Zero-shot never produced an invalid or malformed label -- all five
+    #   inputs got exactly one of billing/technical/other, correctly
+    #   formatted, on the first try. One-shot and few-shot produced the
+    #   IDENTICAL five labels, with no visible improvement in consistency or
+    #   formatting over zero-shot. This is a genuinely useful negative
+    #   result, not a failed experiment: for a strong model on a small,
+    #   clearly-specified 3-category task, extra examples bought nothing
+    #   measurable here, including on the deliberate near-miss input
+    #   ("invoice PDF won't download" -- correctly technical, not billing,
+    #   even zero-shot).
+    #   Cost scaled clearly with example count: zero-shot ran ~54-60 est.
+    #   tokens/call, one-shot ~78-84 (~1.4x), few-shot ~144-150 (~2.5-2.7x
+    #   zero-shot). At real volume (thousands of tickets/day), few-shot's
+    #   prompt-token cost for this task would run roughly 2.5x zero-shot's
+    #   for identical output quality on this test set.
+    #   Given that tradeoff, I'd ship zero-shot for this specific task: same
+    #   correct output, ~40% of the token cost. Important caveat: this
+    #   conclusion rests on only 5 curated test inputs. Before fully trusting
+    #   it in production, I'd want to validate zero-shot against a larger,
+    #   messier sample of real tickets (more ambiguous phrasing, multiple
+    #   issues in one message) rather than assume 5 clean examples generalize
+    #   -- few-shot's real value tends to show up precisely on the harder,
+    #   more ambiguous cases a small hand-picked test set is unlikely to
+    #   contain by construction.
 
 
 if __name__ == "__main__":

@@ -34,14 +34,18 @@ Run with:
 import os
 from dataclasses import dataclass, field
 
-# TODO: fill these in from anthropic.com/pricing (current $ per MILLION
-# tokens). These starter numbers are PLACEHOLDERS, not real prices.
+# Real prices as of this writing, from claude.com/pricing ($ per MILLION tokens)
+# -- verify against the live pricing page before trusting these for a real
+# budgeting decision; prices change over time.
 PRICING_PER_MILLION_TOKENS = {
-    "claude-haiku-4-5": {"input": 0.0, "output": 0.0},   # TODO: fill in real $/1M
-    "claude-opus-4-latest": {"input": 0.0, "output": 0.0},       # TODO: fill in real $/1M
-    # Add more model entries as needed. Consider also adding a reduced
-    # "cache_read" rate per model here once you've verified the current
-    # cache pricing discount at docs.claude.com.
+    "claude-haiku-4-5": {
+        "input": 1.0, "output": 5.0,
+        "cache_read": 0.10, "cache_write": 1.25,
+    },
+    "claude-opus-5": {
+        "input": 5.0, "output": 25.0,
+        "cache_read": 0.50, "cache_write": 6.25,
+    },
 }
 
 
@@ -65,22 +69,23 @@ class CostTracker:
         self.records.append(record)
 
     def total_cost(self) -> float:
-        # TODO: sum record.cost_usd across self.records
-        raise NotImplementedError
+        return sum(record.cost_usd for record in self.records)
 
     def total_tokens(self) -> tuple[int, int]:
         """Return (total_input_tokens, total_output_tokens) across all records."""
-        # TODO: sum input_tokens and output_tokens separately across records
-        raise NotImplementedError
+        total_in = sum(record.input_tokens for record in self.records)
+        total_out = sum(record.output_tokens for record in self.records)
+        return total_in, total_out
 
     def report(self) -> str:
         """Return a short human-readable summary string."""
         total_in, total_out = self.total_tokens()
-        # TODO: build and return a multi-line string reporting:
-        #   - number of calls tracked
-        #   - total input tokens, total output tokens
-        #   - total estimated cost (formatted as e.g. "$0.001234")
-        raise NotImplementedError
+        return (
+            f"Calls tracked: {len(self.records)}\n"
+            f"Total input tokens: {total_in}\n"
+            f"Total output tokens: {total_out}\n"
+            f"Total estimated cost: ${self.total_cost():.6f}"
+        )
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -93,8 +98,16 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing table, rather than silently returning 0 — a silent $0 estimate
     for an unpriced model is worse than an explicit error.
     """
-    # TODO: implement using PRICING_PER_MILLION_TOKENS
-    raise NotImplementedError
+    if model not in PRICING_PER_MILLION_TOKENS:
+        raise KeyError(
+            f"No pricing entry for model {model!r} in PRICING_PER_MILLION_TOKENS "
+            "-- add one (verified against claude.com/pricing) before estimating cost."
+        )
+    price = PRICING_PER_MILLION_TOKENS[model]
+    return (
+        (input_tokens / 1_000_000) * price["input"]
+        + (output_tokens / 1_000_000) * price["output"]
+    )
 
 
 def call_and_track(client, model: str, prompt: str, tracker: CostTracker) -> str:
@@ -112,8 +125,34 @@ def call_and_track(client, model: str, prompt: str, tracker: CostTracker) -> str
       5. Build a UsageRecord and tracker.add(...) it.
       6. Return response.content[0].text.
     """
-    # TODO: implement per the docstring above.
-    raise NotImplementedError
+    response = client.messages.create(
+        model=model,
+        max_tokens=200,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    input_tokens = response.usage.input_tokens
+    output_tokens = response.usage.output_tokens
+    cache_creation = getattr(response.usage, "cache_creation_input_tokens", 0)
+    cache_read = getattr(response.usage, "cache_read_input_tokens", 0)
+
+    cost = estimate_cost(model, input_tokens, output_tokens)
+
+    tracker.add(
+        UsageRecord(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_creation_input_tokens=cache_creation,
+            cache_read_input_tokens=cache_read,
+            cost_usd=cost,
+        )
+    )
+
+    # Not response.content[0].text: see ex1/ex3 -- a thinking block can
+    # precede the text block, so filter by type rather than assume position.
+    return "".join(
+        block.text for block in response.content if getattr(block, "type", None) == "text"
+    )
 
 
 def main() -> None:
@@ -129,7 +168,7 @@ def main() -> None:
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = "claude-haiku-4-5"  # TODO: verify this model name at docs.claude.com
+    model = "claude-haiku-4-5"  # verified current in ex1/ex2/ex3
 
     tracker = CostTracker()
 
@@ -152,8 +191,28 @@ def main() -> None:
     # and does that change which model tier you'd choose (tie this back to
     # Exercise 3)?
     #
-    # YOUR OBSERVATION:
-    # (write here)
+    # YOUR OBSERVATION (from a real run):
+    #   3 tiny factual-lookup calls cost $0.000310 total (40 input + 54
+    #   output tokens on Haiku 4.5) -- negligibly small, as expected for
+    #   one-line questions on the cheapest tier. Worth noting output tokens
+    #   dominated the cost more than raw token count suggests: output is
+    #   priced 5x input per token for Haiku ($5 vs $1/MTok), so the 54 output
+    #   tokens contributed roughly 4x the cost the 40 input tokens did,
+    #   despite being a similar token count.
+    #   Projected to 100,000 calls/day at this same per-call average (~13.3
+    #   input / 18 output tokens): Haiku 4.5 would cost ~$10.33/day
+    #   (~$3,772/year). The SAME workload on Opus 5 (5x the per-token price
+    #   on both input and output) would cost ~$51.67/day (~$18,858/year) --
+    #   a >$15,000/year difference for identical trivial factual-lookup
+    #   questions that don't need Opus's reasoning depth at all.
+    #   This directly reinforces ex3's conclusion rather than changing it:
+    #   for a task shape like this (short, simple, no multi-step reasoning
+    #   required), volume is exactly what turns "which tier" from an
+    #   abstract preference into a concrete, material cost decision --
+    #   $15k/year isn't a rounding error, and none of it would have bought
+    #   better answers here. The lesson from ex3 (match tier to whether the
+    #   task actually needs the capability) is the same lesson that makes
+    #   this projection worth computing before shipping, not after.
 
 
 if __name__ == "__main__":
