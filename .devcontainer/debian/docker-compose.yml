@@ -20,11 +20,8 @@ services:
       - ccdv-f-course-query-copilot:/home/container-user/.copilot
       - ccdv-f-course-query-gemini:/home/container-user/.gemini
       # - /var/run/docker.sock:/var/run/docker.sock
-      # macOS Docker Desktop: forwards SSH agent via host-services socket.
-      # Linux alternative: ${SSH_AUTH_SOCK}:/ssh-agent
-      - /run/host-services/ssh-auth.sock:/ssh-agent
-    environment:
-      SSH_AUTH_SOCK: /ssh-agent
+      # SSH: the actual ~/.ssh template bind and SSH_AUTH_SOCK forwarding live
+      # in devcontainer.json's "mounts" (see copy-ssh-files.sh), not here.
     # Command to run when the container starts.
     # 'sleep infinity' keeps the container running indefinitely so VS Code can attach.
     command: sleep infinity
@@ -32,3 +29,5 @@ services:
 volumes:
   ccdv-f-course-query-claude:
   ccdv-f-course-query-continue:
+  ccdv-f-course-query-copilot:
+  ccdv-f-course-query-gemini:

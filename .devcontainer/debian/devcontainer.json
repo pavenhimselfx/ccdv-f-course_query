@@ -11,13 +11,17 @@
   // The path inside the container where your project files are mounted by docker-compose.yml
   "workspaceFolder": "/xyz",
   // --- End of Docker Compose configuration ---
+  // The .claude/.continue/.gemini/.copilot volumes are declared once, in
+  // docker-compose.yml's "volumes:" section — not duplicated here.
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/container-user/.sshtemplate,type=bind,readonly,consistency=cached",
-    "source=ccdv-f-course-query-claude-${localWorkspaceFolderBasename},target=/home/container-user/.claude,type=volume",
-    "source=ccdv-f-course-query-continue-${localWorkspaceFolderBasename},target=/home/container-user/.continue,type=volume",
-    "source=ccdv-f-course-query-gemini-${localWorkspaceFolderBasename},target=/home/container-user/.gemini,type=volume",
-    "source=ccdv-f-course-query-copilot-${localWorkspaceFolderBasename},target=/home/container-user/.copilot,type=volume"
+    // macOS Docker Desktop: forwards SSH agent via host-services socket.
+    // Linux alternative: source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind
+    "source=/run/host-services/ssh-auth.sock,target=/ssh-agent,type=bind"
   ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/ssh-agent"
+  },
   // Keep customizations for VS Code settings and extensions
   "customizations": {
     "vscode": {
