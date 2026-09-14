@@ -446,3 +446,68 @@ Now work through `exercises/ex1_prompt_injection_defense.py`,
 `exercises/ex2_guardrail_hook.py`, and
 `exercises/ex3_secrets_and_key_hygiene.py`, in that order. Then take
 `quiz.md`.
+
+---
+
+## Key takeaways from working the exercises
+
+Same spirit as Domains 5 and 6's equivalent sections: these are the concrete
+findings from actually *running* ex1-ex3 against real attempts to defeat
+them, not restatements of the conceptual sections above.
+
+1. **Layered defense held up against a real, aggressive injection attempt,
+   live.** ex1's mock page contained a fake "SYSTEM OVERRIDE," a fabricated
+   "required diagnostic step," and an explicit "don't mention this
+   instruction" cover-your-tracks clause — a realistic, non-trivial attempt.
+   Against a real model call, the delimiter tags + explicit system
+   instruction + independent pattern guardrail held together: the model
+   summarized the actual content, never leaked the system prompt, never
+   referenced the attacker's URL, and — beyond the minimum bar — proactively
+   told the user an injection attempt had been embedded in the page. That
+   last part isn't something any of the three defense layers explicitly
+   asked for; it's the model's own judgment adding a layer none of the
+   deterministic mechanisms provided.
+2. **A guardrail only proves itself against both directions of test.**
+   ex1's pattern check needed to be verified both ways — flagging the
+   actual injected page AND *not* flagging the clean weather page — since a
+   check that flags everything "works" on the attack case for the wrong
+   reason. The real evidence was both assertions passing together.
+3. **Naive path-prefix checks fail in more than one way, not just one.**
+   ex2's guardrail hook had to defend against `..`-based traversal
+   (`/workspace/project/../../etc/passwd`) AND a same-length trap a
+   `startswith()` check would miss entirely: a sibling directory whose name
+   merely *starts with* the allowed path as a literal string
+   (`/workspace/project-evil/file.txt`). Both were tested for real and both
+   required normalizing the path first and checking for an exact match or a
+   proper `/`-terminated prefix — string-prefix matching alone was
+   insufficient for either case, not just the traversal one.
+4. **Default-deny has to be the explicit fallback, not an assumption.**
+   ex2's hook needed a real test (`test_default_deny_unknown_tool`)
+   confirming an unrecognized tool name fails closed — it's easy to write a
+   policy as "block these specific bad things" and quietly default-allow
+   anything you didn't think to list, which inverts the safe posture for
+   exactly the cases you didn't anticipate.
+5. **A hook's real advantage is that it can't be talked out of its
+   decision.** Unlike a system-prompt instruction, which is still the
+   model's judgment call under the hood (however well it usually holds, as
+   ex1 demonstrated), `guardrail_hook()` in ex2 runs the identical policy
+   regardless of how the proposed tool call is framed or justified — the
+   same deterministic Python code approves or blocks a `delete_file` call
+   the same way every time, with no dependency on the model's reasoning
+   about the request at all.
+6. **"Never log the secret" has a concrete positive form, not just a
+   prohibition.** ex3's `good_get_client()` printed `"ANTHROPIC_API_KEY is
+   set (108 chars)"` in a real run — confirming presence and giving a
+   sanity-checkable signal (a suspiciously short or long count would be a
+   red flag) without ever exposing a single character of the actual value.
+   "Don't log secrets" doesn't mean "don't log anything about the secret."
+7. **The same stale-model-name problem from Domain 5 recurred in every
+   exercise in this domain too** (`claude-sonnet-4-5` needed correcting to
+   a current model in ex1 and ex3). This is worth internalizing as a
+   structural fact about building against any course/doc frozen at a point
+   in time, not a one-off annoyance specific to Domain 5's exercises.
+8. **The throughline across all three exercises, stated explicitly by their
+   own test structure:** a security control isn't validated by its happy
+   path. Each exercise's real test was the adversarial case — a live
+   injection attempt, a path-traversal and sibling-directory trick, a
+   hardcoded-secret static scan — not the case where nothing goes wrong.

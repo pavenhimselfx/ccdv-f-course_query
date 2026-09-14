@@ -59,9 +59,25 @@ def bad_get_client():
 # least 3 — there are more than 3 called out in the comments already; try to
 # name them in your own words as if explaining to a teammate in code review):
 #
-# 1.
-# 2.
-# 3.
+# 1. The key is a literal string baked into source code. If this file is ever
+#    committed, the key is permanently recoverable from git history even
+#    after a later commit "removes" it -- deleting the line doesn't delete
+#    the history, and automated scanners actively hunt public repos for
+#    exactly this pattern.
+# 2. The same literal key would be used identically across dev/staging/prod
+#    if this code shipped as-is -- no per-environment scoping at all. A leak
+#    or compromise in one environment compromises all of them simultaneously,
+#    and there's no way to revoke/rotate access to just one environment
+#    without breaking the others.
+# 3. The full key is printed to stdout in `print(f"...{api_key}")`. That
+#    lands in terminal scrollback, CI logs, and any log aggregation system
+#    this process's output flows through -- a realistic leak path with no
+#    "hacking" required, just someone reading logs they're already allowed
+#    to read.
+# 4. There's no explicit check for whether the key is even present/valid
+#    before constructing the client -- a missing key would only surface
+#    later as a less-specific SDK-level authentication error at request
+#    time, instead of a clear, actionable message at the point of failure.
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +102,31 @@ def bad_get_client():
 
 def good_get_client():
     """TODO: implement per the requirements above."""
-    raise NotImplementedError("TODO: implement good_get_client")
+    try:
+        from dotenv import load_dotenv
+
+        if os.path.exists(".env"):
+            load_dotenv(".env")
+    except ImportError:
+        # python-dotenv isn't installed -- fine as long as the key is
+        # already in the environment some other way (e.g. `export ...`).
+        pass
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set. Either `export ANTHROPIC_API_KEY=...` "
+            "in your shell, or copy .env.example to .env and fill in a real key "
+            "-- see 00-setup/README.md."
+        )
+
+    # Confirm presence without leaking the value: length only, never any
+    # substring of the actual key.
+    print(f"ANTHROPIC_API_KEY is set ({len(api_key)} chars)")
+
+    import anthropic
+
+    return anthropic.Anthropic(api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -101,11 +141,28 @@ def good_get_client():
 #
 # KEY MANAGEMENT CHECKLIST
 # -------------------------
-# [ ]
-# [ ]
-# [ ]
-# [ ]
-# [ ]
+# [ ] Never hardcode a key as a literal in source code -- a key committed to
+#     version control is permanently recoverable from history even after a
+#     later commit removes it, and public-repo scanners actively hunt for
+#     exactly this pattern.
+# [ ] Load keys from environment variables (an untracked .env file locally,
+#     kept out of version control via .gitignore) or a dedicated secret
+#     manager -- never from a literal in code. In production, prefer a
+#     secret manager/vault over a bare env var baked into deploy config,
+#     since it adds audit logging and rotation support env vars alone don't.
+# [ ] Scope keys per environment and per least-privilege need -- separate
+#     keys for dev/staging/production so a leak in one doesn't compromise
+#     the others, and so any one of them can be revoked/rotated without
+#     affecting the rest. Prefer a narrowly-scoped key over a broad one
+#     wherever the platform supports it, even if it's more setup work.
+# [ ] Rotate keys periodically, and immediately after any suspected
+#     exposure -- treat rotation as a routine operational practice you've
+#     actually exercised, not a break-glass procedure improvised under
+#     pressure the first time it's actually needed.
+# [ ] Never log secrets -- request/response logging, error messages, and
+#     stack traces are common accidental leak paths; a key embedded in a
+#     header dump or an exception message can land in a log aggregator far
+#     more people can read than were ever meant to see the key itself.
 # ---------------------------------------------------------------------------
 
 
@@ -121,7 +178,7 @@ def run_smoke_test():
 
     client = good_get_client()
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-haiku-4-5",  # confirmed working; a smoke test doesn't need Sonnet/Opus
         max_tokens=20,
         messages=[{"role": "user", "content": "Reply with exactly: hygiene check ok"}],
     )

@@ -24,6 +24,7 @@ Run with:
     python ex2_guardrail_hook.py
 """
 
+import posixpath
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -84,7 +85,12 @@ class HookDecision:
 # ---------------------------------------------------------------------------
 
 DESTRUCTIVE_COMMAND_SUBSTRINGS = [
-    # TODO: add lowercase substrings here, e.g. "rm -rf"
+    "rm -rf",
+    "mkfs",
+    ":(){:|:&};:",
+    "shutdown",
+    "> /dev/sda",
+    "dd if=",
 ]
 
 
@@ -110,9 +116,43 @@ DESTRUCTIVE_COMMAND_SUBSTRINGS = [
 # Return a HookDecision(approved=..., reason=...).
 # ---------------------------------------------------------------------------
 
+def _is_within_allowed_directory(path: str) -> bool:
+    # posixpath, not os.path: ALLOWED_DIRECTORY simulates a POSIX-style path
+    # (e.g. inside a Linux container), and this code never touches the real
+    # filesystem -- using os.path here would apply this host's OS semantics
+    # (e.g. Windows drive letters/backslashes) to a path meant to represent a
+    # different target environment, giving inconsistent results depending on
+    # where the hook itself happens to run.
+    normalized = posixpath.normpath(path)
+    allowed = posixpath.normpath(ALLOWED_DIRECTORY)
+    return normalized == allowed or normalized.startswith(allowed + "/")
+
+
 def guardrail_hook(call: ProposedToolCall) -> HookDecision:
     """TODO: implement the policy described above."""
-    raise NotImplementedError("TODO: implement guardrail_hook")
+    if call.tool_name == "delete_file":
+        path = call.arguments.get("path", "")
+        if _is_within_allowed_directory(path):
+            return HookDecision(approved=True, reason="path is within the allowed directory")
+        return HookDecision(
+            approved=False,
+            reason=f"path {path!r} resolves outside the allowed directory {ALLOWED_DIRECTORY!r}",
+        )
+
+    if call.tool_name == "run_shell_command":
+        command = call.arguments.get("command", "")
+        lowered = command.lower()
+        for substring in DESTRUCTIVE_COMMAND_SUBSTRINGS:
+            if substring in lowered:
+                return HookDecision(
+                    approved=False,
+                    reason=f"command matches disallowed pattern {substring!r}",
+                )
+        return HookDecision(approved=True, reason="command does not match any destructive pattern")
+
+    return HookDecision(
+        approved=False, reason=f"unrecognized tool {call.tool_name!r} -- default deny"
+    )
 
 
 # ---------------------------------------------------------------------------
