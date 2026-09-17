@@ -563,3 +563,71 @@ better served, and better maintained, as one shared MCP server.
 
 Continue to `exercises/` when you're ready to apply this. Work `ex1` → `ex2`
 → `ex2b` → `ex3` in order, then `quiz.md`.
+
+---
+
+## Key takeaways from working the exercises
+
+Same spirit as Domains 5-7's equivalent sections: concrete findings from
+actually *building and running* ex1-ex3, not restatements of the
+conceptual sections above.
+
+1. **A good tool description shapes agent strategy, not just call
+   correctness — sometimes so well it avoids the failure case you built.**
+   `create_order`'s description in ex1 explicitly suggested calling
+   `lookup_inventory` first if unsure of stock — and in a live run, Claude
+   followed that suggestion so well it likely never called `create_order`
+   at all for the insufficient-stock scenario, sidestepping the exact
+   `is_error` path the scenario was designed to trigger. Good tool writing
+   can be *too* good at preventing the very failure you wanted to observe.
+2. **Testing a mechanism in isolation and testing it through a live agent
+   are different kinds of evidence.** Because of point 1, `create_order`'s
+   `is_error` handling had to be verified two ways: directly (calling the
+   handler function with insufficient-stock arguments and checking the
+   returned `is_error: True`) and separately reasoning about what the live
+   agent actually exercised. "The code is correct" and "this run exercised
+   that code path" are two different claims — don't let a clean agent
+   transcript substitute for confirming the failure path directly.
+3. **The full round-trip through a real client is still worth doing even
+   when in-process testing already passed.** ex2's `get_current_time`,
+   resource, and prompt were all verified by calling `list_tools`/
+   `call_tool`/`read_resource`/`get_prompt` directly in-process — genuine
+   evidence, but it can't exercise process launch, stdio transport, or
+   real client discovery. Only connecting the server to Claude Code as an
+   actual MCP client (ex2b) tests that layer; in this case it happened to
+   confirm what the in-process tests already showed, but it's testing a
+   structurally different thing, not a redundant re-check.
+4. **SDK/library drift recurred in this domain too, twice.** The model
+   name needed the same kind of correction as Domains 5-7
+   (`claude-sonnet-4-5` → a current model), and — more substantially —
+   the installed `mcp` 2.x package had renamed `FastMCP` to `MCPServer`
+   and moved its import path entirely, confirmed only by actually trying
+   the import the exercise suggested and reading the resulting
+   `ModuleNotFoundError`, which named the rename directly.
+5. **An exercise's own suggested fix can still contain a real bug.** ex2's
+   inline TODO hint for `get_current_time` suggested
+   `datetime.now(timezone.utc) + timedelta(hours=offset)` — this shifts
+   the wall-clock *value* but leaves the timezone *label* as `+00:00`,
+   producing an ISO string that's internally inconsistent (it claims UTC
+   while showing a non-UTC time). Direct testing caught it; the fix was
+   constructing a real fixed-offset `timezone` object instead, which keeps
+   the represented instant and its label consistent.
+6. **The tools-vs-skill-vs-MCP decision framework has a strict order, not
+   a flat checklist.** Getting this right in ex3's own scenarios (Skill
+   for a procedure using existing tools; custom tool for new, single-app,
+   unreachable-until-now logic) didn't fully transfer to a quiz scenario
+   phrased differently (Q8: "check shipment status" *sounds* procedural
+   but the logistics system access itself doesn't exist yet) — the
+   concrete lesson is to explicitly ask "is this a new capability to
+   reach, or a procedure using what I already have?" *before* anything
+   else, rather than pattern-matching on a scenario's surface wording
+   ("sounds like steps" → Skill).
+7. **Building and correctly testing the three MCP primitives didn't fully
+   transfer to recalling their definitions from memory.** ex2 built and
+   verified a tool (`get_current_time`), a resource
+   (`server-info://about`), and a prompt (`time_report`) all correctly —
+   but a quiz question with the *behavior* of one primitive attached to
+   the *name* of a different one (a tool's action-with-schema definition,
+   labeled "resource") still caught a wrong answer. Knowing the concept
+   well enough to build it correctly and reliably recalling its label out
+   of context are not automatically the same skill.

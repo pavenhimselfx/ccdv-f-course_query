@@ -182,10 +182,13 @@ def backend_get_order_status(order_id: str) -> dict:
 
 @tool(
     "lookup_inventory",
-    "TODO",  # TODO: what does it do, when should Claude use it, what does
-             # a SKU look like in this system, is it read-only?
+    "Look up how many units of a given SKU are currently in stock. Read-only "
+    "-- does not change inventory or place an order. Call this to check "
+    "availability before creating an order, or whenever the user asks how "
+    "much stock exists. A SKU looks like 'SKU-100': the literal prefix "
+    "'SKU-' followed by digits.",
     {
-        # TODO: "sku": str
+        "sku": str,
     },
 )
 async def lookup_inventory(args: dict) -> dict:
@@ -203,38 +206,67 @@ async def lookup_inventory(args: dict) -> dict:
     Claude. Crashing here is exactly the bug this exercise is about
     avoiding (see README.md 1.4).
     """
-    raise NotImplementedError("TODO: implement lookup_inventory")
+    try:
+        quantity = backend_lookup_inventory(args["sku"])
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({"sku": args["sku"], "quantity_in_stock": quantity}),
+                }
+            ]
+        }
+    except InventoryError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}
 
 
 @tool(
     "create_order",
-    "TODO",  # TODO: describe what this does, note that it DECREMENTS
-             # stock (i.e. it's a mutating/consequential action, not a
-             # read-only lookup), and when Claude should call it (e.g. only
-             # once SKU/quantity/customer email are all confirmed, if
-             # that's the behavior you want to encourage).
+    "Place an order for a given SKU and quantity, DECREMENTING stock. This "
+    "is a mutating, consequential action -- it changes real inventory state "
+    "and is not reversible through this tool -- so only call it once the "
+    "SKU, quantity, and customer email have all been confirmed with the "
+    "user. quantity must be a positive integer no greater than what's "
+    "currently in stock; use lookup_inventory first if you're not sure "
+    "enough is available.",
     {
-        # TODO: "sku": str, "quantity": int, "customer_email": str
+        "sku": str,
+        "quantity": int,
+        "customer_email": str,
     },
 )
 async def create_order(args: dict) -> dict:
     """TODO: same pattern as lookup_inventory - call
     backend_create_order(**args) in a try/except, return a normal content
     result on success or an is_error result on InventoryError."""
-    raise NotImplementedError("TODO: implement create_order")
+    try:
+        order = backend_create_order(
+            sku=args["sku"],
+            quantity=args["quantity"],
+            customer_email=args["customer_email"],
+        )
+        return {"content": [{"type": "text", "text": json.dumps(order)}]}
+    except InventoryError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}
 
 
 @tool(
     "get_order_status",
-    "TODO",  # TODO: describe what this does and what an order_id looks
-             # like (see backend_create_order for the "ORD-####" format).
+    "Look up the status of a previously created order by its order id. "
+    "Read-only -- does not change anything. An order id looks like "
+    "'ORD-1000': the literal prefix 'ORD-' followed by digits, as returned "
+    "by create_order when an order was placed.",
     {
-        # TODO: "order_id": str
+        "order_id": str,
     },
 )
 async def get_order_status(args: dict) -> dict:
     """TODO: same pattern again - call backend_get_order_status(args["order_id"])."""
-    raise NotImplementedError("TODO: implement get_order_status")
+    try:
+        order = backend_get_order_status(args["order_id"])
+        return {"content": [{"type": "text", "text": json.dumps(order)}]}
+    except InventoryError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +280,11 @@ async def get_order_status(args: dict) -> dict:
 #         version="1.0.0",
 #         tools=[lookup_inventory, create_order, get_order_status],
 #     )
-warehouse_server = None  # TODO
+warehouse_server = create_sdk_mcp_server(
+    name="warehouse",
+    version="1.0.0",
+    tools=[lookup_inventory, create_order, get_order_status],
+)
 
 # TODO: build the options object. `allowed_tools` entries follow
 # "mcp__<server_name>__<tool_name>" - the server_name here is "warehouse"
@@ -263,7 +299,14 @@ warehouse_server = None  # TODO
 #             "mcp__warehouse__get_order_status",
 #         ],
 #     )
-options = None  # TODO
+options = ClaudeAgentOptions(
+    mcp_servers={"warehouse": warehouse_server},
+    allowed_tools=[
+        "mcp__warehouse__lookup_inventory",
+        "mcp__warehouse__create_order",
+        "mcp__warehouse__get_order_status",
+    ],
+)
 
 
 async def run_agent(user_message: str) -> str:
@@ -283,7 +326,13 @@ async def run_agent(user_message: str) -> str:
        call tools across more than one assistant turn before it's done.)
     3. return final_text
     """
-    raise NotImplementedError("TODO: implement run_agent")
+    final_text = ""
+    async for message in query(prompt=user_message, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    final_text = block.text
+    return final_text
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +376,34 @@ async def main():
         "Then describe, concretely, what would have happened instead if "
         "the create_order handler had let the InventoryError propagate "
         "uncaught - what does the end user see in each case?"
+    )
+    print(
+        "\nANSWER (from a real run): Claude's final answer for the "
+        "insufficient-stock scenario correctly explained that SKU-200 only "
+        "has 3 units in stock against the requested 50, stated it had NOT "
+        "placed anything (since create_order is consequential/irreversible), "
+        "and offered three concrete next steps: order the 3 available "
+        "units, hold off until restocked, or specify a different "
+        "SKU/quantity. Notably, its own wording ('I checked stock before "
+        "placing anything') suggests it called lookup_inventory proactively "
+        "and may never have called create_order at all in this run -- a "
+        "direct result of create_order's own description explicitly "
+        "suggesting 'use lookup_inventory first if you're not sure enough "
+        "is available.' The tool description shaped Claude's strategy well "
+        "enough that it sidestepped the exact failure case this scenario "
+        "was designed to trigger. That said, create_order's is_error path "
+        "is independently confirmed correct: calling its handler directly "
+        "with the same insufficient-stock arguments returns "
+        "{'content': [...'Error: Insufficient stock...'], 'is_error': True} "
+        "with no exception raised, so the mechanism itself works whether or "
+        "not this particular run happened to exercise it. If the "
+        "InventoryError had instead been allowed to propagate uncaught, the "
+        "end-user experience would have been completely different: no "
+        "graceful explanation, no alternatives offered -- the exception "
+        "would propagate up through the SDK's tool-dispatch loop and crash "
+        "the run_agent() call (or, in a real deployed service, return a "
+        "500-style error / stack trace), leaving the user with nothing "
+        "useful at all instead of a clear, actionable response."
     )
 
 

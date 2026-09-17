@@ -68,32 +68,23 @@ correct, then compare carefully against solutions/.
 
 from datetime import datetime, timedelta, timezone
 
-# TODO: import the high-level server class. As of this writing the common
-# pattern is:
-#
-#     from mcp.server.fastmcp import FastMCP
-#
-# but double-check against current docs/installed package - this import
-# path is exactly the kind of detail that can shift between SDK versions.
+# DRIFT FOUND BY ACTUALLY CHECKING THE INSTALLED PACKAGE (mcp 2.1.1): the
+# exercise's suggested `from mcp.server.fastmcp import FastMCP` raises
+# ModuleNotFoundError on this version -- mcp 2.x renamed FastMCP to
+# MCPServer and moved it to mcp.server.mcpserver. The decorator/run() shapes
+# below are otherwise the same. Exactly the "verify before you ship" drift
+# this exercise's docstring warns about, confirmed for real rather than
+# assumed.
+from mcp.server.mcpserver import MCPServer
 
-
-# TODO: construct the server object, giving it a name that will identify it
-# to any MCP client that connects (e.g. "time-and-info-server").
-#
-#     mcp_server = FastMCP("time-and-info-server")
+mcp_server = MCPServer("time-and-info-server")
 
 
 # ---------------------------------------------------------------------------
 # TOOL: get_current_time
 # ---------------------------------------------------------------------------
 
-# TODO: register this function as a TOOL using the server object's tool
-# decorator (commonly @mcp_server.tool()). Notice this looks almost exactly
-# like a client-side Anthropic tool from Exercise 1 in shape (name +
-# description via docstring + typed parameters) - the SDK typically infers
-# the JSON Schema from the Python type hints and uses the docstring as the
-# description, which is why BOTH still matter: write a clear docstring the
-# same way you'd write a tool "description" in Exercise 1.
+@mcp_server.tool()
 def get_current_time(timezone_offset_hours: int = 0) -> str:
     """Get the current time, shifted by a whole-hour UTC offset.
 
@@ -104,40 +95,50 @@ def get_current_time(timezone_offset_hours: int = 0) -> str:
     Returns:
         An ISO-8601-ish timestamp string reflecting the shifted time.
     """
-    # TODO: compute now = datetime.now(timezone.utc) + timedelta(hours=timezone_offset_hours)
-    # and return an isoformat() string (or similarly formatted string).
-    raise NotImplementedError("TODO: implement get_current_time")
+    # Not `datetime.now(timezone.utc) + timedelta(hours=offset)`: tested that
+    # directly and found it shifts the wall-clock VALUE but leaves the
+    # tzinfo label as "+00:00" (UTC) -- producing an ISO string that's
+    # actively wrong (it claims to be UTC while showing a non-UTC value).
+    # Constructing a real fixed-offset tzinfo instead keeps the represented
+    # instant correct AND makes isoformat() print the matching offset.
+    shifted_tz = timezone(timedelta(hours=timezone_offset_hours))
+    now = datetime.now(shifted_tz)
+    return now.isoformat()
 
 
 # ---------------------------------------------------------------------------
 # RESOURCE: server-info://about
 # ---------------------------------------------------------------------------
 
-# TODO: register this function as a RESOURCE using the server object's
-# resource decorator with a URI, e.g. @mcp_server.resource("server-info://about")
-# Resources are for READ-ONLY CONTEXT, not actions - notice this function
-# takes NO caller-supplied arguments, unlike the tool above.
+@mcp_server.resource("server-info://about")
 def about_this_server() -> str:
     """Static description of this MCP server, returned when a client reads
     the server-info://about resource."""
-    # TODO: return a short multi-line string: name, one-sentence purpose,
-    # and a list of what it exposes (1 tool: get_current_time; 1 resource:
-    # this one). This is the kind of thing a client might show a user or
-    # feed to Claude as background context about what this server offers.
-    raise NotImplementedError("TODO: implement about_this_server")
+    return (
+        "time-and-info-server\n"
+        "A minimal demo MCP server for the CCDV-F course, Domain 8, Exercise 2.\n\n"
+        "Exposes:\n"
+        "- 1 tool: get_current_time(timezone_offset_hours) -- current UTC time, "
+        "shifted by a whole-hour offset.\n"
+        "- 1 resource: server-info://about -- this description."
+    )
 
 
 # ---------------------------------------------------------------------------
 # BONUS: PROMPT (optional)
 # ---------------------------------------------------------------------------
 
-# TODO (optional, bonus): if your installed SDK version supports a prompt
-# decorator (commonly @mcp_server.prompt()), register a "time_report"
-# prompt template that produces a message asking Claude to phrase the
-# current time in a friendly, conversational sentence. This demonstrates
-# the THIRD MCP primitive (README.md 2.2): a reusable, possibly
-# parameterized prompt template the server hands to any connected client,
-# rather than a tool (action) or a resource (context data).
+@mcp_server.prompt()
+def time_report(timezone_offset_hours: int = 0) -> str:
+    """Ask Claude to phrase the current time as a friendly, conversational
+    sentence, demonstrating the third MCP primitive (README.md 2.2): a
+    reusable prompt template the server hands to any connected client,
+    rather than a tool (action) or a resource (context data)."""
+    current_time = get_current_time(timezone_offset_hours)
+    return (
+        f"The current time (UTC{timezone_offset_hours:+d}) is {current_time}. "
+        "Summarize this for the user in one friendly, conversational sentence."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -145,19 +146,7 @@ def about_this_server() -> str:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # TODO: run the server over stdio - the standard transport for a
-    # locally-launched, process-based MCP server (README.md 2.4). Commonly:
-    #
-    #     mcp_server.run()          # often defaults to stdio
-    #   or
-    #     mcp_server.run(transport="stdio")
-    #
-    # Check current SDK docs for the exact call. Until this TODO is done,
-    # this script intentionally does nothing when run directly.
-    print(
-        "TODO: call mcp_server.run() (or the current SDK's equivalent) "
-        "here to actually start serving over stdio."
-    )
+    mcp_server.run(transport="stdio")
 
 # ---------------------------------------------------------------------------
 # NEXT: TEST THIS SERVER FOR FREE

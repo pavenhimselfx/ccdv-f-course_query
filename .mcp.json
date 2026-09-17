@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "time-and-info-server": {
+      "command": "C:/Users/kriste2/OneDrive - Knowit AB/Documents/Claude_Course/ccdv-f-course_query/.venv/Scripts/python.exe",
+      "args": [
+        "C:/Users/kriste2/OneDrive - Knowit AB/Documents/Claude_Course/ccdv-f-course_query/08-tools-and-mcps/exercises/ex2_build_an_mcp_server.py"
+      ]
+    }
+  }
+}
