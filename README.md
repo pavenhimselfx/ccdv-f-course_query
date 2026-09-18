@@ -58,6 +58,13 @@ you use the cheapest model tier and set a spend cap. **`00-setup/README.md` has 
 breakdown, including a table of exactly which exercises need which path** — read it before
 doing anything else.
 
+**Real-world confirmation:** this course's author funded a Console API key with $5 and,
+after completing every metered-key exercise across all nine domains, had used only
+**$1.44** of it. Set a spend cap when you create your key, and **do not enable automatic
+top-up/auto-recharge of credits** — a hard cap is what actually protects you from a
+runaway bill (e.g. a bug that loops API calls), where auto-recharge would just keep
+paying into it instead.
+
 ## Recommended order
 
 1. **Start with `00-setup/`.** Follow that folder's `README.md` — it covers both the free
