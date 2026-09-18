@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 .venv/
 09-practice-exam/practice-exam-results.md
+quiz-results.md
